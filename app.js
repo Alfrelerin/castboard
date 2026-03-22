@@ -699,8 +699,8 @@ async function deleteCasting() {
 
 // ---- Gmail Integration ----
 
-// Default keywords optimized for casting emails in Spanish
-const DEFAULT_KEYWORDS = 'casting, callback, audicion, audición, prueba, self-tape, selftape, convocatoria, personaje, papel, director de casting, directora de casting, rodaje, grabacion, grabación, prueba camara, videobook';
+// Default keywords optimized for casting emails in Spanish + English
+const DEFAULT_KEYWORDS = 'casting, callback, audicion, audición, prueba, self-tape, selftape, convocatoria, personaje, papel, director de casting, directora de casting, rodaje, grabacion, grabación, prueba camara, videobook, audition, casting call, screen test, fitting, wardrobe fitting, table read, recall, shortlist, sides, shooting, call sheet, casting director';
 
 // Auto-sync interval (3 minutes)
 let autoSyncInterval = null;
@@ -733,30 +733,36 @@ function parseEmailBody(subject, body, from, emailDate) {
     .trim();
   result.project = projectName || subject;
 
-  // --- Detect status from content ---
-  if (/callback|segunda prueba|segunda fase|te hemos seleccionado para.*prueba/i.test(text)) {
+  // --- Detect status from content (ES + EN) ---
+  if (/callback|segunda prueba|segunda fase|te hemos seleccionado para.*prueba|recall|called back|second round/i.test(text)) {
     result.detectedStatus = 'callback';
-  } else if (/opcionad[ao]|en opci[oó]n|shortlist|preseleccionad/i.test(text)) {
+  } else if (/opcionad[ao]|en opci[oó]n|shortlist|preseleccionad|on hold|penciled|avail check/i.test(text)) {
     result.detectedStatus = 'optioned';
-  } else if (/confirmad[ao]|seleccionad[ao]|enhorabuena.*papel|felicidades.*papel|has sido elegid/i.test(text)) {
+  } else if (/confirmad[ao]|seleccionad[ao]|enhorabuena.*papel|felicidades.*papel|has sido elegid|you('ve| have) been (selected|cast|booked)|congratulations|you got the (part|role)/i.test(text)) {
     result.detectedStatus = 'booked';
-  } else if (/no ha sido posible|lamentablemente|no.*seleccionad|descartad|no.*elegid/i.test(text)) {
+  } else if (/no ha sido posible|lamentablemente|no.*seleccionad|descartad|no.*elegid|unfortunately|not been selected|went another direction|decided to go with/i.test(text)) {
     result.detectedStatus = 'rejected';
   }
 
-  // --- Character / Role ---
+  // --- Character / Role (ES + EN) ---
   const charMatch = body.match(/personaje[:\s]+["']?([^"'\n,]{2,40})["']?/i)
-    || body.match(/papel(?:\s+de)?[:\s]+["']?([^"'\n,]{2,40})["']?/i);
+    || body.match(/papel(?:\s+de)?[:\s]+["']?([^"'\n,]{2,40})["']?/i)
+    || body.match(/character[:\s]+["']?([^"'\n,]{2,40})["']?/i)
+    || body.match(/(?:role|part)\s+of[:\s]+["']?([^"'\n,]{2,40})["']?/i);
   if (charMatch) result.character = charMatch[1].trim();
 
   const roleMatch = body.match(/rol[:\s]+["']?([^"'\n,]{2,30})["']?/i)
-    || body.match(/(protagonista|antagonista|secundari[oa]|figurante|extra|figuraci[oó]n|reparto principal)/i);
+    || body.match(/(protagonista|antagonista|secundari[oa]|figurante|extra|figuraci[oó]n|reparto principal)/i)
+    || body.match(/(lead|supporting|guest star|co-star|recurring|featured|background|principal|day player)/i);
   if (roleMatch) result.role = roleMatch[1].trim();
 
-  // --- Dates (Spanish formats) ---
-  // "15 de marzo", "15/03/2026", "2026-03-15", "lunes 15 de marzo"
-  const months = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7, agosto:8, septiembre:9, octubre:10, noviembre:11, diciembre:12 };
-  const dateMatch1 = body.match(/(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(?:\s+(?:de\s+)?(\d{4}))?/i);
+  // --- Dates (Spanish + English formats) ---
+  // "15 de marzo", "March 15", "15/03/2026", "2026-03-15"
+  const months = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7, agosto:8, septiembre:9, octubre:10, noviembre:11, diciembre:12, january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12 };
+  const allMonthNames = Object.keys(months).join('|');
+  const dateMatch1 = body.match(new RegExp(`(\\d{1,2})\\s+de\\s+(${allMonthNames})(?:\\s+(?:de\\s+)?(\\d{4}))?`, 'i'));
+  // English: "March 15, 2026" or "March 15 2026"
+  const dateMatchEN = !dateMatch1 && body.match(new RegExp(`(${allMonthNames})\\s+(\\d{1,2})(?:[,\\s]+(\\d{4}))?`, 'i'));
   const dateMatch2 = body.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
   const dateMatch3 = body.match(/(\d{4})-(\d{2})-(\d{2})/);
 
@@ -764,6 +770,11 @@ function parseEmailBody(subject, body, from, emailDate) {
     const day = parseInt(dateMatch1[1]);
     const mon = months[dateMatch1[2].toLowerCase()];
     const year = dateMatch1[3] ? parseInt(dateMatch1[3]) : new Date().getFullYear();
+    result.date = `${year}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  } else if (dateMatchEN) {
+    const mon = months[dateMatchEN[1].toLowerCase()];
+    const day = parseInt(dateMatchEN[2]);
+    const year = dateMatchEN[3] ? parseInt(dateMatchEN[3]) : new Date().getFullYear();
     result.date = `${year}-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
   } else if (dateMatch2) {
     const day = parseInt(dateMatch2[1]);
@@ -805,33 +816,32 @@ function parseEmailBody(subject, body, from, emailDate) {
     }
   }
 
-  // --- Location ---
-  const locMatch = body.match(/(?:direcci[oó]n|ubicaci[oó]n|lugar|localizaci[oó]n|d[oó]nde)[:\s]+([^\n]{5,60})/i)
+  // --- Location (ES + EN) ---
+  const locMatch = body.match(/(?:direcci[oó]n|ubicaci[oó]n|lugar|localizaci[oó]n|d[oó]nde|location|address|venue|studio|where)[:\s]+([^\n]{5,60})/i)
     || body.match(/(?:calle|avda\.?|avenida|plaza|estudio|plat[oó])\s+[^\n]{3,50}/i);
   if (locMatch) result.location = (locMatch[1] || locMatch[0]).trim();
 
-  // --- Director de casting ---
-  const dirMatch = body.match(/(?:director(?:a)?\s+de\s+casting|casting\s+director)[:\s]+([^\n]{3,40})/i)
-    || body.match(/(?:casting\s+(?:por|de))[:\s]+([^\n]{3,40})/i);
+  // --- Director de casting (ES + EN) ---
+  const dirMatch = body.match(/(?:director(?:a)?\s+de\s+casting|casting\s+director|CD)[:\s]+([^\n]{3,40})/i)
+    || body.match(/(?:casting\s+(?:por|de|by))[:\s]+([^\n]{3,40})/i);
   if (dirMatch) result.director = dirMatch[1].trim();
 
-  // --- Company (from sender or body) ---
-  const compMatch = body.match(/(?:productora|producci[oó]n|agencia|produc\.?)[:\s]+([^\n]{3,40})/i);
+  // --- Company (ES + EN, from sender or body) ---
+  const compMatch = body.match(/(?:productora|producci[oó]n|agencia|produc\.?|production|agency|produced by|production company)[:\s]+([^\n]{3,40})/i);
   if (compMatch) {
     result.company = compMatch[1].trim();
   } else if (from) {
-    // Extract company from email sender
     const fromMatch = from.match(/(?:^|\s)([^<@]+?)(?:\s*<|$)/);
     if (fromMatch) result.company = fromMatch[1].trim();
   }
 
-  // --- Project type ---
-  if (/pel[ií]cula|largometraje|cine/i.test(text)) result.projectType = 'cine';
-  else if (/serie|temporada|cap[ií]tulo|episodio/i.test(text)) result.projectType = 'serie';
-  else if (/cortometraje|corto/i.test(text)) result.projectType = 'corto';
-  else if (/anuncio|spot|publicidad|comercial/i.test(text)) result.projectType = 'publicidad';
-  else if (/teatro|obra|escena/i.test(text)) result.projectType = 'teatro';
-  else if (/videoclip|v[ií]deo\s*musical/i.test(text)) result.projectType = 'videoclip';
+  // --- Project type (ES + EN) ---
+  if (/pel[ií]cula|largometraje|cine|feature film|movie/i.test(text)) result.projectType = 'cine';
+  else if (/serie|temporada|cap[ií]tulo|episodio|tv\s*series|episode|season/i.test(text)) result.projectType = 'serie';
+  else if (/cortometraje|corto|short\s*film/i.test(text)) result.projectType = 'corto';
+  else if (/anuncio|spot|publicidad|comercial|commercial|advert|ad\s*campaign/i.test(text)) result.projectType = 'publicidad';
+  else if (/teatro|obra|escena|theatre|theater|play|stage/i.test(text)) result.projectType = 'teatro';
+  else if (/videoclip|v[ií]deo\s*musical|music\s*video/i.test(text)) result.projectType = 'videoclip';
 
   return result;
 }
