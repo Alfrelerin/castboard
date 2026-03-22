@@ -1,4 +1,4 @@
-const CACHE_NAME = 'castboard-v3';
+const CACHE_NAME = 'castboard-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -22,7 +22,7 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.url.includes('googleapis.com')) return;
+  if (e.request.url.includes('googleapis.com') || e.request.url.includes('firebaseio.com') || e.request.url.includes('firestore.googleapis.com') || e.request.url.includes('gstatic.com/firebasejs')) return;
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request))
   );

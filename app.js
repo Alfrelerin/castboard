@@ -1,85 +1,108 @@
 /* ============================================
    Dickmanns' CastBoard - Main Application Logic
+   Firebase Edition (cloud sync across devices)
    ============================================ */
 
-// ---- Data Store (IndexedDB) ----
-const DB_NAME = 'castboard';
-const DB_VERSION = 1;
-const STORE_NAME = 'castings';
+// ---- Firebase Config ----
+const firebaseConfig = {
+  apiKey: "AIzaSyAYQXv9dkKwcldUoUGBJH6PvSAHoB248mE",
+  authDomain: "castboard-8bda8.firebaseapp.com",
+  projectId: "castboard-8bda8",
+  storageBucket: "castboard-8bda8.firebasestorage.app",
+  messagingSenderId: "838332611412",
+  appId: "1:838332611412:web:fdf35a4ee30ec71bc026c1",
+};
 
-class Store {
-  constructor() {
-    this.db = null;
-  }
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
-  async init() {
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onupgradeneeded = (e) => {
-        const db = e.target.result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-          store.createIndex('status', 'status', { unique: false });
-          store.createIndex('date', 'date', { unique: false });
-        }
-      };
-      req.onsuccess = (e) => { this.db = e.target.result; resolve(); };
-      req.onerror = (e) => reject(e.target.error);
-    });
-  }
+// ---- Cloud Store (Firestore) ----
+let currentUser = null;
+let firestoreUnsubscribe = null;
 
+function userCastingsRef() {
+  return db.collection('users').doc(currentUser.uid).collection('castings');
+}
+
+function userSettingsRef() {
+  return db.collection('users').doc(currentUser.uid).collection('settings');
+}
+
+const store = {
   async getAll() {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
-  }
+    const snap = await userCastingsRef().get();
+    return snap.docs.map(d => d.data());
+  },
 
   async put(casting) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.put(casting);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-  }
+    await userCastingsRef().doc(casting.id).set(casting);
+  },
 
   async delete(id) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.delete(id);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
-  }
+    await userCastingsRef().doc(id).delete();
+  },
 
   async clear() {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.clear();
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
+    const snap = await userCastingsRef().get();
+    const batch = db.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  },
+
+  // Real-time listener: calls onUpdate(castings[]) whenever data changes
+  listen(onUpdate) {
+    if (firestoreUnsubscribe) firestoreUnsubscribe();
+    firestoreUnsubscribe = userCastingsRef().onSnapshot(snap => {
+      const data = snap.docs.map(d => d.data());
+      onUpdate(data);
     });
+  },
+
+  stopListening() {
+    if (firestoreUnsubscribe) {
+      firestoreUnsubscribe();
+      firestoreUnsubscribe = null;
+    }
   }
+};
+
+// ---- Dismissed Gmail IDs (Firestore-backed, syncs across devices) ----
+async function getDismissedGmailIds() {
+  try {
+    const doc = await userSettingsRef().doc('dismissed_gmail_ids').get();
+    if (doc.exists) {
+      return new Set(doc.data().ids || []);
+    }
+  } catch (e) { console.warn('getDismissedGmailIds error:', e); }
+  return new Set();
+}
+
+async function addDismissedGmailId(gmailId) {
+  const ids = await getDismissedGmailIds();
+  ids.add(gmailId);
+  await userSettingsRef().doc('dismissed_gmail_ids').set({ ids: [...ids] });
+}
+
+async function dismissCasting(castingId) {
+  const casting = castings.find(c => c.id === castingId);
+  if (!casting) return;
+  if (casting.gmailId) {
+    await addDismissedGmailId(casting.gmailId);
+  }
+  await store.delete(castingId);
+  closeAllModals();
+  toast('Casting descartado — no volverá a importarse', 'success');
 }
 
 // ---- Status Config (3 groups) ----
 const STATUSES = {
-  // Group 1: En proceso (sin respuesta)
   pending:   { label: 'Pendiente',           color: '#8b5cf6', icon: '📋', group: 'proceso' },
   recorded:  { label: 'Grabado no enviado',  color: '#a78bfa', icon: '🎬', group: 'proceso' },
   sent:      { label: 'Enviado',             color: '#6366f1', icon: '📤', group: 'proceso' },
-  // Group 2: Con respuesta
   callback:  { label: 'Callback',            color: '#f59e0b', icon: '📞', group: 'respuesta' },
   optioned:  { label: 'Opcionada',           color: '#3b82f6', icon: '⭐', group: 'respuesta' },
   rejected:  { label: 'Rechazada',           color: '#6b7280', icon: '✗',  group: 'respuesta' },
-  // Group 3: Aceptada
   booked:    { label: 'Aceptada',            color: '#10b981', icon: '✅', group: 'aceptada' },
   filming:   { label: 'En rodaje',           color: '#ec4899', icon: '🎥', group: 'aceptada' },
 };
@@ -93,7 +116,6 @@ const STATUS_GROUPS = [
 const ALL_STATUSES = STATUS_GROUPS.flatMap(g => g.statuses);
 
 // ---- App State ----
-let store;
 let castings = [];
 let currentView = 'calendar';
 let currentFilter = 'all';
@@ -105,7 +127,6 @@ let currentDetailCasting = null;
 // ---- Gmail State ----
 let gmailConnected = false;
 let gmailToken = null;
-const GMAIL_CLIENT_ID = localStorage.getItem('gmail_client_id') || '';
 const GMAIL_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
 
 // ---- SVG Icons ----
@@ -206,7 +227,6 @@ function generateICalEvent(casting) {
 
   if (casting.date && casting.time) {
     dtstart = `DTSTART:${toICalDate(casting.date, casting.time)}`;
-    // Default 2h duration
     const d = new Date(casting.date + 'T' + casting.time);
     d.setHours(d.getHours() + 2);
     const endStr = d.toISOString().split('T')[0];
@@ -215,7 +235,6 @@ function generateICalEvent(casting) {
   } else if (casting.date) {
     dtstart = `DTSTART;VALUE=DATE:${toICalDate(casting.date)}`;
     if (casting.dateEnd) {
-      // iCal DATE end is exclusive, so add 1 day
       const end = new Date(casting.dateEnd + 'T00:00:00');
       end.setDate(end.getDate() + 1);
       dtend = `DTEND;VALUE=DATE:${end.toISOString().split('T')[0].replace(/-/g, '')}`;
@@ -306,7 +325,6 @@ function renderStats() {
   ALL_STATUSES.forEach(s => counts[s] = 0);
   castings.forEach(c => { if (counts[c.status] !== undefined) counts[c.status]++; });
 
-  // Show group totals
   el.innerHTML = STATUS_GROUPS.map(g => {
     const total = g.statuses.reduce((sum, s) => sum + counts[s], 0);
     return `
@@ -346,7 +364,6 @@ function renderCalendar() {
   const dayNames = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
   const filtered = getFilteredCastings();
 
-  // Build events map
   const eventsByDate = {};
   filtered.forEach(c => {
     if (c.date) {
@@ -559,20 +576,17 @@ function openDetail(casting) {
     </div>
   `;
 
-  // Status change buttons
   body.querySelectorAll('.detail-status-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       casting.status = btn.dataset.status;
       casting.updatedAt = Date.now();
       await store.put(casting);
-      castings = await store.getAll();
+      // onSnapshot will update castings array and re-render
       openDetail(casting);
-      renderAll();
       toast(`Estado cambiado a "${STATUSES[casting.status].label}"`);
     });
   });
 
-  // Verify buttons (only if needsReview)
   document.getElementById('btn-verify-casting')?.addEventListener('click', async () => {
     await markAsReviewed(casting.id);
     casting.needsReview = false;
@@ -583,19 +597,16 @@ function openDetail(casting) {
     openForm(casting);
   });
 
-  // Dismiss button (false positive from Gmail)
   document.getElementById('btn-dismiss-casting')?.addEventListener('click', async () => {
     if (!confirm('¿Descartar este casting? Si vino de Gmail, no volverá a importarse.')) return;
     await dismissCasting(casting.id);
   });
 
-  // Edit button
   document.getElementById('btn-edit').onclick = () => {
     closeAllModals();
     openForm(casting);
   };
 
-  // Export iCal button
   document.getElementById('btn-export-ical').onclick = () => {
     exportICalSingle(casting);
   };
@@ -691,9 +702,7 @@ async function saveCasting() {
   };
 
   await store.put(casting);
-  castings = await store.getAll();
   closeAllModals();
-  renderAll();
   toast(editingId ? 'Casting actualizado' : 'Casting creado', 'success');
   editingId = null;
 }
@@ -702,51 +711,19 @@ async function deleteCasting() {
   if (!editingId) return;
   if (!confirm('Seguro que quieres eliminar este casting?')) return;
   await store.delete(editingId);
-  castings = await store.getAll();
   closeAllModals();
-  renderAll();
   toast('Casting eliminado');
   editingId = null;
 }
 
 // ---- Gmail Integration ----
 
-// Default keywords optimized for casting emails in Spanish + English
 const DEFAULT_KEYWORDS = 'casting, callback, audicion, audición, self-tape, selftape, personaje, papel, director de casting, directora de casting, rodaje, grabacion, grabación, prueba cámara, prueba de cámara, videobook, audition, casting call, screen test, fitting, wardrobe fitting, table read, recall, shortlist, sides, shooting, call sheet, casting director';
 
-// Auto-sync interval (3 minutes)
 let autoSyncInterval = null;
 const AUTO_SYNC_MS = 3 * 60 * 1000;
 
-// ---- Dismissed Gmail IDs (false positives that should never re-import) ----
-function getDismissedGmailIds() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem('dismissed_gmail_ids') || '[]'));
-  } catch { return new Set(); }
-}
-
-function addDismissedGmailId(gmailId) {
-  const ids = getDismissedGmailIds();
-  ids.add(gmailId);
-  localStorage.setItem('dismissed_gmail_ids', JSON.stringify([...ids]));
-}
-
-async function dismissCasting(castingId) {
-  const casting = castings.find(c => c.id === castingId);
-  if (!casting) return;
-  // If it came from Gmail, remember the ID so it never comes back
-  if (casting.gmailId) {
-    addDismissedGmailId(casting.gmailId);
-  }
-  await store.delete(castingId);
-  castings = await store.getAll();
-  closeAllModals();
-  renderAll();
-  toast('Casting descartado — no volverá a importarse', 'success');
-}
-
 // ---- Email Body Parser ----
-// Extracts structured data from email text using pattern matching
 
 function parseEmailBody(subject, body, from, emailDate) {
   const text = (subject + ' ' + body).toLowerCase();
@@ -764,7 +741,6 @@ function parseEmailBody(subject, body, from, emailDate) {
     detectedStatus: 'pending',
   };
 
-  // --- Project name: use subject, cleaned up ---
   let projectName = subject
     .replace(/^(re:|fwd:|fw:|rv:)\s*/gi, '')
     .replace(/casting\s*[-:]\s*/i, '')
@@ -772,7 +748,6 @@ function parseEmailBody(subject, body, from, emailDate) {
     .trim();
   result.project = projectName || subject;
 
-  // --- Detect status from content (ES + EN) ---
   if (/callback|segunda prueba|segunda fase|te hemos seleccionado para.*prueba|recall|called back|second round/i.test(text)) {
     result.detectedStatus = 'callback';
   } else if (/opcionad[ao]|en opci[oó]n|shortlist|preseleccionad|on hold|penciled|avail check/i.test(text)) {
@@ -783,7 +758,6 @@ function parseEmailBody(subject, body, from, emailDate) {
     result.detectedStatus = 'rejected';
   }
 
-  // --- Character / Role (ES + EN) ---
   const charMatch = body.match(/personaje[:\s]+["']?([^"'\n,]{2,40})["']?/i)
     || body.match(/papel(?:\s+de)?[:\s]+["']?([^"'\n,]{2,40})["']?/i)
     || body.match(/character[:\s]+["']?([^"'\n,]{2,40})["']?/i)
@@ -795,12 +769,9 @@ function parseEmailBody(subject, body, from, emailDate) {
     || body.match(/(lead|supporting|guest star|co-star|recurring|featured|background|principal|day player)/i);
   if (roleMatch) result.role = roleMatch[1].trim();
 
-  // --- Dates (Spanish + English formats) ---
-  // "15 de marzo", "March 15", "15/03/2026", "2026-03-15"
   const months = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7, agosto:8, septiembre:9, octubre:10, noviembre:11, diciembre:12, january:1, february:2, march:3, april:4, may:5, june:6, july:7, august:8, september:9, october:10, november:11, december:12 };
   const allMonthNames = Object.keys(months).join('|');
   const dateMatch1 = body.match(new RegExp(`(\\d{1,2})\\s+de\\s+(${allMonthNames})(?:\\s+(?:de\\s+)?(\\d{4}))?`, 'i'));
-  // English: "March 15, 2026" or "March 15 2026"
   const dateMatchEN = !dateMatch1 && body.match(new RegExp(`(${allMonthNames})\\s+(\\d{1,2})(?:[,\\s]+(\\d{4}))?`, 'i'));
   const dateMatch2 = body.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
   const dateMatch3 = body.match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -824,7 +795,6 @@ function parseEmailBody(subject, body, from, emailDate) {
     result.date = dateMatch3[0];
   }
 
-  // Fallback: use email date
   if (!result.date && emailDate) {
     try {
       const d = new Date(emailDate);
@@ -832,7 +802,6 @@ function parseEmailBody(subject, body, from, emailDate) {
     } catch(e) {}
   }
 
-  // --- Time ---
   const timeMatch = body.match(/(\d{1,2})[:\.](\d{2})\s*(?:h|hrs?|horas?)?/i)
     || body.match(/a las\s+(\d{1,2})[:\.]?(\d{2})?/i);
   if (timeMatch) {
@@ -841,7 +810,6 @@ function parseEmailBody(subject, body, from, emailDate) {
     result.time = `${h}:${m}`;
   }
 
-  // --- Deadline ---
   const deadlineMatch = body.match(/(?:fecha\s*l[ií]mite|plazo|enviar\s*antes\s*(?:del?)?|deadline)[:\s]+(\d{1,2})\s+de\s+(\w+)(?:\s+(?:de\s+)?(\d{4}))?/i)
     || body.match(/(?:fecha\s*l[ií]mite|plazo|antes\s*del?)[:\s]+(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/i);
   if (deadlineMatch) {
@@ -855,17 +823,14 @@ function parseEmailBody(subject, body, from, emailDate) {
     }
   }
 
-  // --- Location (ES + EN) ---
   const locMatch = body.match(/(?:direcci[oó]n|ubicaci[oó]n|lugar|localizaci[oó]n|d[oó]nde|location|address|venue|studio|where)[:\s]+([^\n]{5,60})/i)
     || body.match(/(?:calle|avda\.?|avenida|plaza|estudio|plat[oó])\s+[^\n]{3,50}/i);
   if (locMatch) result.location = (locMatch[1] || locMatch[0]).trim();
 
-  // --- Director de casting (ES + EN) ---
   const dirMatch = body.match(/(?:director(?:a)?\s+de\s+casting|casting\s+director|CD)[:\s]+([^\n]{3,40})/i)
     || body.match(/(?:casting\s+(?:por|de|by))[:\s]+([^\n]{3,40})/i);
   if (dirMatch) result.director = dirMatch[1].trim();
 
-  // --- Company (ES + EN, from sender or body) ---
   const compMatch = body.match(/(?:productora|producci[oó]n|agencia|produc\.?|production|agency|produced by|production company)[:\s]+([^\n]{3,40})/i);
   if (compMatch) {
     result.company = compMatch[1].trim();
@@ -874,7 +839,6 @@ function parseEmailBody(subject, body, from, emailDate) {
     if (fromMatch) result.company = fromMatch[1].trim();
   }
 
-  // --- Project type (ES + EN) ---
   if (/pel[ií]cula|largometraje|cine|feature film|movie/i.test(text)) result.projectType = 'cine';
   else if (/serie|temporada|cap[ií]tulo|episodio|tv\s*series|episode|season/i.test(text)) result.projectType = 'serie';
   else if (/cortometraje|corto|short\s*film/i.test(text)) result.projectType = 'corto';
@@ -885,29 +849,21 @@ function parseEmailBody(subject, body, from, emailDate) {
   return result;
 }
 
-// ---- Decode email body from Gmail API ----
-
 function decodeEmailBody(payload) {
   if (!payload) return '';
-
-  // Simple text body
   if (payload.body?.data) {
     return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
   }
-
-  // Multipart: look for text/plain first, then text/html
   if (payload.parts) {
     let textPart = payload.parts.find(p => p.mimeType === 'text/plain');
     if (!textPart) textPart = payload.parts.find(p => p.mimeType === 'text/html');
     if (textPart?.body?.data) {
       let decoded = atob(textPart.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-      // Strip HTML tags if it was HTML
       if (textPart.mimeType === 'text/html') {
         decoded = decoded.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
       }
       return decoded;
     }
-    // Nested multipart
     for (const part of payload.parts) {
       if (part.parts) {
         const nested = decodeEmailBody(part);
@@ -927,13 +883,11 @@ async function gmailAutoSync(silent = true) {
   const lastSync = localStorage.getItem('gmail_last_sync') || '';
 
   try {
-    // Build query: keywords + only emails after last sync
     let queryParts = keywords.split(',').map(k => k.trim()).filter(Boolean);
     let query = queryParts.map(k => `"${k}"`).join(' OR ');
     if (lastSync) {
       query += ` after:${lastSync}`;
     } else {
-      // First sync: only last 30 days
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       query += ` after:${thirtyDaysAgo.toISOString().split('T')[0].replace(/-/g, '/')}`;
@@ -945,30 +899,25 @@ async function gmailAutoSync(silent = true) {
     if (res.status === 401) {
       gmailConnected = false;
       gmailToken = null;
-      localStorage.removeItem('gmail_token');
       stopAutoSync();
-      if (!silent) toast('Sesion de Gmail expirada. Vuelve a conectar.', 'error');
+      if (!silent) toast('Sesion de Gmail expirada. Reconecta desde el boton de Gmail.', 'error');
       return;
     }
 
     const data = await res.json();
     if (!data.messages || data.messages.length === 0) {
-      // Update last sync time even if no results
       localStorage.setItem('gmail_last_sync', new Date().toISOString().split('T')[0].replace(/-/g, '/'));
       return;
     }
 
-    // Get existing gmail IDs to skip duplicates + dismissed IDs (false positives)
     const existingGmailIds = new Set(castings.filter(c => c.gmailId).map(c => c.gmailId));
-    const dismissedIds = getDismissedGmailIds();
+    const dismissedIds = await getDismissedGmailIds();
 
     let imported = 0;
     for (const msg of data.messages) {
-      // Skip if already imported or previously dismissed as false positive
       if (existingGmailIds.has(msg.id)) continue;
       if (dismissedIds.has(msg.id)) continue;
 
-      // Fetch full message to get body
       const msgRes = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
         { headers: { Authorization: `Bearer ${gmailToken}` } }
@@ -984,10 +933,8 @@ async function gmailAutoSync(silent = true) {
       const emailDate = headers.date || '';
       const body = decodeEmailBody(msgData.payload) || msgData.snippet || '';
 
-      // Parse the email
       const parsed = parseEmailBody(subject, body, from, emailDate);
 
-      // Create casting with needsReview flag
       const casting = {
         id: genId(),
         project: parsed.project,
@@ -1014,12 +961,9 @@ async function gmailAutoSync(silent = true) {
       imported++;
     }
 
-    // Update last sync timestamp
     localStorage.setItem('gmail_last_sync', new Date().toISOString().split('T')[0].replace(/-/g, '/'));
 
     if (imported > 0) {
-      castings = await store.getAll();
-      renderAll();
       toast(`${imported} casting(s) importado(s) automaticamente desde Gmail`, 'success');
     }
 
@@ -1043,16 +987,12 @@ function stopAutoSync() {
   }
 }
 
-// ---- Mark casting as reviewed ----
-
 async function markAsReviewed(castingId) {
   const casting = castings.find(c => c.id === castingId);
   if (!casting) return;
   casting.needsReview = false;
   casting.updatedAt = Date.now();
   await store.put(casting);
-  castings = await store.getAll();
-  renderAll();
   toast('Casting verificado', 'success');
 }
 
@@ -1060,46 +1000,16 @@ async function markAsReviewed(castingId) {
 
 function renderGmailPanel() {
   const body = document.getElementById('gmail-body');
-
-  if (!GMAIL_CLIENT_ID) {
-    body.innerHTML = `
-      <div class="setup-info">
-        <h3>Configurar conexion con Gmail</h3>
-        <p>Para leer emails de casting automaticamente, necesitas crear unas credenciales gratuitas de Google. Es un proceso de una sola vez:</p>
-        <p><strong>1.</strong> Ve a <a href="https://console.cloud.google.com" target="_blank" style="color:var(--accent-light);">Google Cloud Console</a></p>
-        <p><strong>2.</strong> Crea un proyecto nuevo (ej: "CastBoard")</p>
-        <p><strong>3.</strong> En "APIs y servicios" > "Biblioteca", activa <code>Gmail API</code></p>
-        <p><strong>4.</strong> En "Credenciales", crea un <code>ID de cliente OAuth 2.0</code> de tipo "Aplicacion web"</p>
-        <p><strong>5.</strong> En "Origenes de JavaScript autorizados" anade la URL donde alojes la app (ej: <code>https://tunombre.github.io</code>)</p>
-        <p><strong>6.</strong> Copia el Client ID y pegalo aqui abajo:</p>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Client ID de Google</label>
-        <input type="text" class="form-input" id="gmail-client-id" placeholder="xxxx.apps.googleusercontent.com">
-      </div>
-      <button class="btn btn-primary" id="btn-save-gmail-id" style="width:100%;">Guardar y conectar</button>
-    `;
-    document.getElementById('btn-save-gmail-id')?.addEventListener('click', () => {
-      const id = document.getElementById('gmail-client-id').value.trim();
-      if (id) {
-        localStorage.setItem('gmail_client_id', id);
-        toast('Client ID guardado. Recarga la pagina para conectar.', 'success');
-        setTimeout(() => location.reload(), 1500);
-      }
-    });
-    return;
-  }
-
   const lastSync = localStorage.getItem('gmail_last_sync') || 'Nunca';
   const pendingReview = castings.filter(c => c.needsReview).length;
 
   body.innerHTML = `
     <div class="gmail-status">
       <div class="gmail-dot ${gmailConnected ? 'connected' : 'disconnected'}"></div>
-      <span class="gmail-status-text">${gmailConnected ? 'Conectado — sincronizacion automatica activa' : 'No conectado'}</span>
+      <span class="gmail-status-text">${gmailConnected ? 'Conectado — sincronizacion automatica activa' : 'No conectado a Gmail'}</span>
       ${gmailConnected
         ? '<button class="btn btn-sm btn-secondary" id="btn-gmail-disconnect">Desconectar</button>'
-        : '<button class="btn btn-sm btn-primary" id="btn-gmail-connect">Conectar</button>'
+        : '<button class="btn btn-sm btn-primary" id="btn-gmail-connect">Conectar Gmail</button>'
       }
     </div>
 
@@ -1135,18 +1045,10 @@ function renderGmailPanel() {
       </div>
     ` : `
       <div class="setup-info">
-        <p>Pulsa "Conectar" para autorizar el acceso de lectura a tu Gmail. Solo se leeran los emails, no se modificara ni enviara nada.</p>
+        <p>Pulsa "Conectar Gmail" para autorizar el acceso de lectura a tu Gmail. Solo se leeran los emails, no se modificara ni enviara nada.</p>
         <p>Una vez conectado, los emails de casting se importaran automaticamente cada 3 minutos.</p>
       </div>
     `}
-
-    <div class="config-section" style="margin-top:20px;">
-      <h3>Cambiar Client ID</h3>
-      <div class="form-group">
-        <input type="text" class="form-input" id="gmail-client-id-change" value="${GMAIL_CLIENT_ID}" placeholder="xxxx.apps.googleusercontent.com">
-      </div>
-      <button class="btn btn-secondary btn-sm" id="btn-change-gmail-id">Actualizar Client ID</button>
-    </div>
   `;
 
   document.getElementById('btn-gmail-connect')?.addEventListener('click', gmailConnect);
@@ -1154,48 +1056,32 @@ function renderGmailPanel() {
   document.getElementById('btn-gmail-sync-now')?.addEventListener('click', async () => {
     toast('Sincronizando...', 'info');
     await gmailAutoSync(false);
-    renderGmailPanel(); // refresh panel stats
+    renderGmailPanel();
   });
   document.getElementById('btn-save-keywords')?.addEventListener('click', () => {
     const kw = document.getElementById('gmail-keywords')?.value || '';
     localStorage.setItem('gmail_keywords', kw);
     toast('Palabras clave guardadas', 'success');
   });
-  document.getElementById('btn-change-gmail-id')?.addEventListener('click', () => {
-    const id = document.getElementById('gmail-client-id-change').value.trim();
-    if (id) {
-      localStorage.setItem('gmail_client_id', id);
-      toast('Client ID actualizado. Recarga la pagina.', 'success');
-      setTimeout(() => location.reload(), 1500);
-    }
-  });
 }
 
 async function gmailConnect() {
   try {
-    const clientId = localStorage.getItem('gmail_client_id');
-    if (!clientId) { toast('Configura el Client ID primero', 'error'); return; }
-    if (!window.google?.accounts) {
-      await loadScript('https://accounts.google.com/gsi/client');
+    // Use Firebase Auth to get a Google access token with Gmail scope
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope(GMAIL_SCOPES);
+
+    const result = await auth.signInWithPopup(provider);
+    const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) {
+      gmailToken = credential.accessToken;
+      gmailConnected = true;
+      renderGmailPanel();
+      toast('Conectado a Gmail. Buscando emails...', 'success');
+      await gmailAutoSync(false);
+      renderGmailPanel();
+      startAutoSync();
     }
-    const tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: GMAIL_SCOPES,
-      callback: async (response) => {
-        if (response.access_token) {
-          gmailToken = response.access_token;
-          gmailConnected = true;
-          localStorage.setItem('gmail_token', gmailToken);
-          renderGmailPanel();
-          toast('Conectado a Gmail. Buscando emails...', 'success');
-          // Immediate first sync
-          await gmailAutoSync(false);
-          renderGmailPanel();
-          startAutoSync();
-        }
-      },
-    });
-    tokenClient.requestAccessToken();
   } catch (err) {
     console.error('Gmail connect error:', err);
     toast('Error al conectar con Gmail: ' + err.message, 'error');
@@ -1204,26 +1090,40 @@ async function gmailConnect() {
 
 function gmailDisconnect() {
   stopAutoSync();
-  const tokenToRevoke = gmailToken;
   gmailToken = null;
   gmailConnected = false;
-  localStorage.removeItem('gmail_token');
-  if (window.google?.accounts && tokenToRevoke) {
-    google.accounts.oauth2.revoke(tokenToRevoke);
-  }
   renderGmailPanel();
   toast('Desconectado de Gmail');
 }
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
+// ---- Auth: Login / Logout ----
+
+async function loginWithGoogle() {
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope(GMAIL_SCOPES);
+    const result = await auth.signInWithPopup(provider);
+
+    // Also grab Gmail token if available
+    const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+    if (credential?.accessToken) {
+      gmailToken = credential.accessToken;
+      gmailConnected = true;
+    }
+  } catch (err) {
+    console.error('Login error:', err);
+    toast('Error al iniciar sesion: ' + err.message, 'error');
+  }
+}
+
+async function logout() {
+  stopAutoSync();
+  store.stopListening();
+  gmailToken = null;
+  gmailConnected = false;
+  castings = [];
+  currentUser = null;
+  await auth.signOut();
 }
 
 // ---- Modals ----
@@ -1256,13 +1156,10 @@ async function importData(file) {
     if (!Array.isArray(data)) throw new Error('Formato invalido');
     for (const item of data) {
       if (item.id && item.project) {
-        // Migrate old statuses
         if (item.status === 'casting') item.status = 'pending';
         await store.put(item);
       }
     }
-    castings = await store.getAll();
-    renderAll();
     toast(`${data.length} castings importados`, 'success');
   } catch (err) {
     toast('Error al importar: ' + err.message, 'error');
@@ -1302,7 +1199,14 @@ function setupEvents() {
     openModal('modal-gmail');
   });
 
-  document.getElementById('btn-settings').addEventListener('click', () => openModal('modal-settings'));
+  document.getElementById('btn-settings').addEventListener('click', () => {
+    // Update user info in settings
+    if (currentUser) {
+      document.getElementById('settings-user-info').textContent =
+        `Conectado como: ${currentUser.displayName || currentUser.email}`;
+    }
+    openModal('modal-settings');
+  });
 
   document.getElementById('modal-overlay').addEventListener('click', closeAllModals);
   document.getElementById('modal-form-close').addEventListener('click', closeAllModals);
@@ -1337,6 +1241,16 @@ function setupEvents() {
     if (e.target.files[0]) importData(e.target.files[0]);
   });
   document.getElementById('btn-export-all-ical')?.addEventListener('click', exportICalAll);
+
+  // Logout button
+  document.getElementById('btn-logout')?.addEventListener('click', async () => {
+    if (confirm('¿Cerrar sesion? Tus datos se mantienen en la nube.')) {
+      await logout();
+    }
+  });
+
+  // Login button
+  document.getElementById('btn-login')?.addEventListener('click', loginWithGoogle);
 }
 
 // ---- Service Worker ----
@@ -1349,38 +1263,73 @@ function registerSW() {
   }
 }
 
-// ---- Init ----
+// ---- Auth State Observer & Init ----
 
-async function init() {
-  store = new Store();
-  await store.init();
-  castings = await store.getAll();
+function showLoginScreen() {
+  document.getElementById('login-screen').classList.remove('hidden');
+}
 
-  // Migrate old "casting" status to "pending"
-  let migrated = false;
-  for (const c of castings) {
-    if (c.status === 'casting') {
-      c.status = 'pending';
-      await store.put(c);
-      migrated = true;
-    }
+function hideLoginScreen() {
+  document.getElementById('login-screen').classList.add('hidden');
+}
+
+function onUserSignedIn(user) {
+  currentUser = user;
+  hideLoginScreen();
+
+  // Show user avatar
+  const avatar = document.getElementById('user-avatar');
+  if (user.photoURL) {
+    avatar.src = user.photoURL;
+    avatar.style.display = '';
   }
-  if (migrated) castings = await store.getAll();
 
-  const savedToken = localStorage.getItem('gmail_token');
-  if (savedToken) {
-    gmailToken = savedToken;
-    gmailConnected = true;
-    // Start auto-sync and do an immediate check
+  // Start real-time listener — this keeps castings synced across devices
+  store.listen((data) => {
+    castings = data;
+    // Migrate old statuses
+    castings.forEach(c => {
+      if (c.status === 'casting') c.status = 'pending';
+    });
+    renderAll();
+  });
+
+  // Start Gmail auto-sync if we have a token
+  if (gmailToken && gmailConnected) {
     startAutoSync();
     setTimeout(() => gmailAutoSync(true), 2000);
   }
 
+  console.log("Dickmanns' CastBoard initialized for", user.displayName || user.email);
+}
+
+function onUserSignedOut() {
+  currentUser = null;
+  castings = [];
+  gmailToken = null;
+  gmailConnected = false;
+  store.stopListening();
+  stopAutoSync();
+  showLoginScreen();
+
+  const avatar = document.getElementById('user-avatar');
+  avatar.style.display = 'none';
+}
+
+// ---- Main Init ----
+
+function init() {
   setupEvents();
-  renderAll();
   registerSW();
 
-  console.log("Dickmanns' CastBoard initialized with", castings.length, 'castings');
+  // Listen for auth state changes
+  auth.onAuthStateChanged((user) => {
+    if (user) {
+      onUserSignedIn(user);
+    } else {
+      onUserSignedOut();
+    }
+  });
 }
 
 init();

@@ -715,6 +715,20 @@ body {
 @keyframes toastIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
 
+/* ---- Login Screen ---- */
+.login-screen {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg-primary);
+  display: flex; align-items: center; justify-content: center;
+}
+.login-screen.hidden { display: none; }
+.login-card {
+  text-align: center; padding: 40px 32px;
+  background: var(--bg-secondary); border-radius: var(--radius-lg);
+  border: 1px solid var(--border); max-width: 360px; width: 90%;
+}
+.user-avatar { border: 2px solid var(--accent); }
+
 /* ---- Search ---- */
 .search-container {
   position: relative;
