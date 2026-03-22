@@ -533,10 +533,16 @@ function openDetail(casting) {
       <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">
         Este casting fue importado de Gmail. Revisa que los datos extraidos sean correctos y pulsa "Verificar" para confirmarlo.
       </p>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-primary btn-sm" id="btn-verify-casting">Verificar datos correctos</button>
         <button class="btn btn-secondary btn-sm" id="btn-edit-and-verify">Editar y corregir</button>
+        <button class="btn btn-sm" id="btn-dismiss-casting" style="background:var(--rejected);color:#fff;">🚫 Descartar (falso positivo)</button>
       </div>
+    </div>` : ''}
+
+    ${(!casting.needsReview && casting.source === 'gmail') ? `
+    <div style="text-align:right;margin-bottom:8px;">
+      <button class="btn btn-sm" id="btn-dismiss-casting" style="background:var(--rejected);color:#fff;font-size:0.78rem;">🚫 Descartar (no es un casting)</button>
     </div>` : ''}
 
     ${casting.notes ? `
@@ -575,6 +581,12 @@ function openDetail(casting) {
   document.getElementById('btn-edit-and-verify')?.addEventListener('click', () => {
     closeAllModals();
     openForm(casting);
+  });
+
+  // Dismiss button (false positive from Gmail)
+  document.getElementById('btn-dismiss-casting')?.addEventListener('click', async () => {
+    if (!confirm('¿Descartar este casting? Si vino de Gmail, no volverá a importarse.')) return;
+    await dismissCasting(casting.id);
   });
 
   // Edit button
@@ -700,11 +712,38 @@ async function deleteCasting() {
 // ---- Gmail Integration ----
 
 // Default keywords optimized for casting emails in Spanish + English
-const DEFAULT_KEYWORDS = 'casting, callback, audicion, audición, prueba, self-tape, selftape, convocatoria, personaje, papel, director de casting, directora de casting, rodaje, grabacion, grabación, prueba camara, videobook, audition, casting call, screen test, fitting, wardrobe fitting, table read, recall, shortlist, sides, shooting, call sheet, casting director';
+const DEFAULT_KEYWORDS = 'casting, callback, audicion, audición, self-tape, selftape, personaje, papel, director de casting, directora de casting, rodaje, grabacion, grabación, prueba cámara, prueba de cámara, videobook, audition, casting call, screen test, fitting, wardrobe fitting, table read, recall, shortlist, sides, shooting, call sheet, casting director';
 
 // Auto-sync interval (3 minutes)
 let autoSyncInterval = null;
 const AUTO_SYNC_MS = 3 * 60 * 1000;
+
+// ---- Dismissed Gmail IDs (false positives that should never re-import) ----
+function getDismissedGmailIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem('dismissed_gmail_ids') || '[]'));
+  } catch { return new Set(); }
+}
+
+function addDismissedGmailId(gmailId) {
+  const ids = getDismissedGmailIds();
+  ids.add(gmailId);
+  localStorage.setItem('dismissed_gmail_ids', JSON.stringify([...ids]));
+}
+
+async function dismissCasting(castingId) {
+  const casting = castings.find(c => c.id === castingId);
+  if (!casting) return;
+  // If it came from Gmail, remember the ID so it never comes back
+  if (casting.gmailId) {
+    addDismissedGmailId(casting.gmailId);
+  }
+  await store.delete(castingId);
+  castings = await store.getAll();
+  closeAllModals();
+  renderAll();
+  toast('Casting descartado — no volverá a importarse', 'success');
+}
 
 // ---- Email Body Parser ----
 // Extracts structured data from email text using pattern matching
@@ -919,13 +958,15 @@ async function gmailAutoSync(silent = true) {
       return;
     }
 
-    // Get existing gmail IDs to skip duplicates
+    // Get existing gmail IDs to skip duplicates + dismissed IDs (false positives)
     const existingGmailIds = new Set(castings.filter(c => c.gmailId).map(c => c.gmailId));
+    const dismissedIds = getDismissedGmailIds();
 
     let imported = 0;
     for (const msg of data.messages) {
-      // Skip if already imported
+      // Skip if already imported or previously dismissed as false positive
       if (existingGmailIds.has(msg.id)) continue;
+      if (dismissedIds.has(msg.id)) continue;
 
       // Fetch full message to get body
       const msgRes = await fetch(
