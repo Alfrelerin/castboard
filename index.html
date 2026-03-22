@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f0f1a">
+  <title>Dickmanns' CastBoard</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%238b5cf6'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white'>🎬</text></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">🎬</div>
+        <span>Dickmanns' CastBoard</span>
+      </div>
+      <div class="view-tabs">
+        <button class="view-tab active" data-view="calendar">Calendario</button>
+        <button class="view-tab" data-view="kanban">Tablero</button>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-ghost btn-icon" id="btn-gmail" title="Gmail">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        </button>
+        <button class="btn btn-ghost btn-icon" id="btn-settings" title="Ajustes">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <button class="btn btn-primary" id="btn-new">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span class="desktop-only">Nuevo</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats-bar" id="stats-bar"></div>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- Search & Filters -->
+    <div class="search-container">
+      <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" class="search-input" id="search-input" placeholder="Buscar casting, proyecto, ubicacion...">
+    </div>
+    <div class="filter-bar" id="filter-bar"></div>
+
+    <!-- Calendar View -->
+    <div id="view-calendar" class="view-content"></div>
+
+    <!-- Kanban View -->
+    <div id="view-kanban" class="view-content" style="display:none"></div>
+  </main>
+
+  <!-- Modal Overlay -->
+  <div class="modal-overlay" id="modal-overlay"></div>
+
+  <!-- Casting Modal (Create/Edit) -->
+  <div class="modal" id="modal-form">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-form-title">Nuevo Casting</h2>
+      <button class="btn btn-ghost btn-icon" id="modal-form-close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="casting-form">
+        <div class="form-group">
+          <label class="form-label">Nombre del proyecto *</label>
+          <input type="text" class="form-input" id="f-project" required placeholder="Ej: Corto 'La Espera'">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Personaje</label>
+            <input type="text" class="form-input" id="f-character" placeholder="Ej: Maria">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rol</label>
+            <input type="text" class="form-input" id="f-role" placeholder="Ej: Protagonista">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Estado</label>
+          <select class="form-select" id="f-status">
+            <optgroup label="En proceso">
+              <option value="pending">Pendiente de hacer</option>
+              <option value="recorded">Grabado no enviado</option>
+              <option value="sent">Enviado esperando respuesta</option>
+            </optgroup>
+            <optgroup label="Con respuesta">
+              <option value="callback">Callback</option>
+              <option value="optioned">Opcionada</option>
+              <option value="rejected">Rechazada</option>
+            </optgroup>
+            <optgroup label="Aceptada">
+              <option value="booked">Aceptada / Confirmada</option>
+              <option value="filming">En rodaje</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Fecha</label>
+            <input type="date" class="form-input" id="f-date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Hora</label>
+            <input type="time" class="form-input" id="f-time">
+          </div>
+        </div>
+        <div class="form-group deadline-field" id="deadline-group">
+          <label class="form-label">Fecha limite de envio</label>
+          <input type="date" class="form-input" id="f-deadline">
+          <p style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">Para castings pendientes o grabados sin enviar</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha fin (si es rodaje de varios dias)</label>
+          <input type="date" class="form-input" id="f-date-end">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ubicacion</label>
+          <input type="text" class="form-input" id="f-location" placeholder="Ej: Estudios Picasso, Madrid">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Director/a de casting</label>
+          <input type="text" class="form-input" id="f-director" placeholder="Ej: Rosa Garcia">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Productora / Agencia</label>
+          <input type="text" class="form-input" id="f-company" placeholder="Ej: Mediapro">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo de proyecto</label>
+          <select class="form-select" id="f-type">
+            <option value="">-- Seleccionar --</option>
+            <option value="cine">Cine</option>
+            <option value="serie">Serie / TV</option>
+            <option value="corto">Cortometraje</option>
+            <option value="publicidad">Publicidad</option>
+            <option value="teatro">Teatro</option>
+            <option value="videoclip">Videoclip</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notas</label>
+          <textarea class="form-textarea" id="f-notes" placeholder="Detalles adicionales, requisitos, texto a preparar..."></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="btn-delete" style="margin-right:auto;display:none">Eliminar</button>
+      <button class="btn btn-secondary" id="btn-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save">Guardar</button>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal" id="modal-detail">
+    <div class="modal-header">
+      <h2 class="modal-title" id="detail-title">Detalle</h2>
+      <div style="display:flex;gap:4px;">
+        <button class="btn btn-ghost btn-icon" id="btn-export-ical" title="Exportar al calendario">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </button>
+        <button class="btn btn-ghost btn-icon" id="btn-edit" title="Editar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn btn-ghost btn-icon" id="modal-detail-close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="modal-body" id="detail-body"></div>
+  </div>
+
+  <!-- Gmail Config Modal -->
+  <div class="modal" id="modal-gmail">
+    <div class="modal-header">
+      <h2 class="modal-title">Conexion con Gmail</h2>
+      <button class="btn btn-ghost btn-icon" id="modal-gmail-close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="gmail-body"></div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal" id="modal-settings">
+    <div class="modal-header">
+      <h2 class="modal-title">Ajustes</h2>
+      <button class="btn btn-ghost btn-icon" id="modal-settings-close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="config-section">
+        <h3>Calendario</h3>
+        <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;">
+          Exporta todos tus castings como archivo .ics para importarlos en Google Calendar, Apple Calendar u otro calendario.
+        </p>
+        <button class="btn btn-secondary" id="btn-export-all-ical">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Exportar todo al calendario (.ics)
+        </button>
+      </div>
+      <div class="config-section">
+        <h3>Datos</h3>
+        <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;">
+          Los datos se guardan localmente en tu navegador. Puedes exportar una copia de seguridad o importar datos.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" id="btn-export">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exportar JSON
+          </button>
+          <label class="btn btn-secondary" style="cursor:pointer;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Importar JSON
+            <input type="file" accept=".json" id="btn-import" style="display:none">
+          </label>
+        </div>
+      </div>
+      <div class="config-section">
+        <h3>Acerca de</h3>
+        <p style="font-size:0.85rem;color:var(--text-secondary);">
+          CastBoard v1.0 — Tu gestor de castings personal.<br>
+          Hecho con cari&ntilde;o y mucho amor para Laura &lt;3
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
