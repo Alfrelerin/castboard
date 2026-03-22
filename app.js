@@ -536,13 +536,13 @@ function openDetail(casting) {
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-primary btn-sm" id="btn-verify-casting">Verificar datos correctos</button>
         <button class="btn btn-secondary btn-sm" id="btn-edit-and-verify">Editar y corregir</button>
-        <button class="btn btn-sm" id="btn-dismiss-casting" style="background:var(--rejected);color:#fff;">🚫 Descartar (falso positivo)</button>
+        <button class="btn btn-sm" id="btn-dismiss-casting" style="background:#ef4444;color:#fff;">🚫 Descartar (falso positivo)</button>
       </div>
     </div>` : ''}
 
     ${(!casting.needsReview && casting.source === 'gmail') ? `
     <div style="text-align:right;margin-bottom:8px;">
-      <button class="btn btn-sm" id="btn-dismiss-casting" style="background:var(--rejected);color:#fff;font-size:0.78rem;">🚫 Descartar (no es un casting)</button>
+      <button class="btn btn-sm" id="btn-dismiss-casting" style="background:#ef4444;color:#fff;font-size:0.78rem;">🚫 Descartar (no es un casting)</button>
     </div>` : ''}
 
     ${casting.notes ? `
