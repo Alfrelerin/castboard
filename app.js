@@ -1067,20 +1067,29 @@ function renderGmailPanel() {
 
 async function gmailConnect() {
   try {
-    // Use Firebase Auth to get a Google access token with Gmail scope
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope(GMAIL_SCOPES);
 
-    const result = await auth.signInWithPopup(provider);
-    const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-    if (credential?.accessToken) {
-      gmailToken = credential.accessToken;
+    let result;
+    // If already signed in, re-authenticate to get a fresh Google access token
+    if (auth.currentUser) {
+      result = await auth.currentUser.reauthenticateWithPopup(provider);
+    } else {
+      result = await auth.signInWithPopup(provider);
+    }
+
+    const accessToken = result.credential?.accessToken;
+    if (accessToken) {
+      gmailToken = accessToken;
       gmailConnected = true;
       renderGmailPanel();
       toast('Conectado a Gmail. Buscando emails...', 'success');
       await gmailAutoSync(false);
       renderGmailPanel();
       startAutoSync();
+    } else {
+      toast('No se pudo obtener el token de Gmail. Intenta de nuevo.', 'error');
+      console.log('signIn result:', JSON.stringify(result, null, 2));
     }
   } catch (err) {
     console.error('Gmail connect error:', err);
@@ -1104,11 +1113,13 @@ async function loginWithGoogle() {
     provider.addScope(GMAIL_SCOPES);
     const result = await auth.signInWithPopup(provider);
 
-    // Also grab Gmail token if available
-    const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-    if (credential?.accessToken) {
-      gmailToken = credential.accessToken;
+    // Grab Gmail token (compat SDK: result.credential directly)
+    const accessToken = result.credential?.accessToken;
+    if (accessToken) {
+      gmailToken = accessToken;
       gmailConnected = true;
+      startAutoSync();
+      setTimeout(() => gmailAutoSync(true), 2000);
     }
   } catch (err) {
     console.error('Login error:', err);
