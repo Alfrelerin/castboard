@@ -1,4 +1,4 @@
-const CACHE_NAME = 'castboard-v4';
+const CACHE_NAME = 'castboard-v5';
 const ASSETS = [
   './',
   './index.html',

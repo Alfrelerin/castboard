@@ -16,6 +16,8 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
+// Fix for Safari: force long polling to avoid WebChannel CORS issues
+db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
 
 // ---- Cloud Store (Firestore) ----
 let currentUser = null;
@@ -1069,16 +1071,16 @@ async function gmailConnect() {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope(GMAIL_SCOPES);
+    // Force account selection to always get a fresh credential with accessToken
+    provider.setCustomParameters({ prompt: 'consent' });
 
-    let result;
-    // If already signed in, re-authenticate to get a fresh Google access token
-    if (auth.currentUser) {
-      result = await auth.currentUser.reauthenticateWithPopup(provider);
-    } else {
-      result = await auth.signInWithPopup(provider);
-    }
+    // Always use signInWithPopup — it returns credential with accessToken
+    const result = await auth.signInWithPopup(provider);
+    console.log('Gmail connect result:', result);
 
     const accessToken = result.credential?.accessToken;
+    console.log('Access token obtained:', !!accessToken);
+
     if (accessToken) {
       gmailToken = accessToken;
       gmailConnected = true;
@@ -1089,10 +1091,11 @@ async function gmailConnect() {
       startAutoSync();
     } else {
       toast('No se pudo obtener el token de Gmail. Intenta de nuevo.', 'error');
-      console.log('signIn result:', JSON.stringify(result, null, 2));
+      console.log('Full result object:', result);
+      console.log('result.credential:', result.credential);
     }
   } catch (err) {
-    console.error('Gmail connect error:', err);
+    console.error('Gmail connect error code:', err.code, 'message:', err.message);
     toast('Error al conectar con Gmail: ' + err.message, 'error');
   }
 }
