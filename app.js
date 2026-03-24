@@ -17,7 +17,7 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 // Fix for Safari: force long polling to completely avoid WebChannel CORS issues
-db.settings({ experimentalForceLongPolling: true, merge: true });
+db.settings({ experimentalForceLongPolling: true });
 
 // ---- Cloud Store (Firestore) ----
 let currentUser = null;
