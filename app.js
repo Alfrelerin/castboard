@@ -878,22 +878,35 @@ function decodeEmailBody(payload) {
 
 // ---- Auto-sync: fetch new emails and auto-import ----
 
+function formatSyncTime() {
+  const now = new Date();
+  return now.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) + ' ' +
+         now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+}
+
 async function gmailAutoSync(silent = true) {
-  if (!gmailToken || !gmailConnected) return;
+  if (!gmailToken || !gmailConnected) {
+    console.log('Gmail sync skipped: token=' + !!gmailToken + ' connected=' + gmailConnected);
+    if (!silent) toast('Gmail no conectado. Pulsa "Conectar Gmail" primero.', 'error');
+    return;
+  }
 
   const keywords = localStorage.getItem('gmail_keywords') || DEFAULT_KEYWORDS;
-  const lastSync = localStorage.getItem('gmail_last_sync') || '';
+  // Use date-only for the Gmail query (after:), not for display
+  const lastSyncDate = localStorage.getItem('gmail_last_sync_date') || '';
 
   try {
     let queryParts = keywords.split(',').map(k => k.trim()).filter(Boolean);
     let query = queryParts.map(k => `"${k}"`).join(' OR ');
-    if (lastSync) {
-      query += ` after:${lastSync}`;
+    if (lastSyncDate) {
+      query += ` after:${lastSyncDate}`;
     } else {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       query += ` after:${thirtyDaysAgo.toISOString().split('T')[0].replace(/-/g, '/')}`;
     }
+
+    console.log('Gmail sync query:', query);
 
     const searchUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=20`;
     const res = await fetch(searchUrl, { headers: { Authorization: `Bearer ${gmailToken}` } });
@@ -903,12 +916,23 @@ async function gmailAutoSync(silent = true) {
       gmailToken = null;
       stopAutoSync();
       if (!silent) toast('Sesion de Gmail expirada. Reconecta desde el boton de Gmail.', 'error');
+      renderGmailPanel();
+      return;
+    }
+
+    if (!res.ok) {
+      console.error('Gmail API error:', res.status, await res.text());
+      if (!silent) toast('Error de Gmail API: ' + res.status, 'error');
       return;
     }
 
     const data = await res.json();
+    console.log('Gmail sync found', data.messages?.length || 0, 'messages matching keywords');
+
     if (!data.messages || data.messages.length === 0) {
-      localStorage.setItem('gmail_last_sync', new Date().toISOString().split('T')[0].replace(/-/g, '/'));
+      localStorage.setItem('gmail_last_sync_date', new Date().toISOString().split('T')[0].replace(/-/g, '/'));
+      localStorage.setItem('gmail_last_sync', formatSyncTime());
+      if (!silent) toast('No se encontraron emails nuevos de casting', 'info');
       return;
     }
 
@@ -916,9 +940,12 @@ async function gmailAutoSync(silent = true) {
     const dismissedIds = await getDismissedGmailIds();
 
     let imported = 0;
+    let skippedExisting = 0;
+    let skippedDismissed = 0;
+
     for (const msg of data.messages) {
-      if (existingGmailIds.has(msg.id)) continue;
-      if (dismissedIds.has(msg.id)) continue;
+      if (existingGmailIds.has(msg.id)) { skippedExisting++; continue; }
+      if (dismissedIds.has(msg.id)) { skippedDismissed++; continue; }
 
       const msgRes = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
@@ -934,6 +961,8 @@ async function gmailAutoSync(silent = true) {
       const from = headers.from || '';
       const emailDate = headers.date || '';
       const body = decodeEmailBody(msgData.payload) || msgData.snippet || '';
+
+      console.log('Processing email:', subject, '| from:', from);
 
       const parsed = parseEmailBody(subject, body, from, emailDate);
 
@@ -963,10 +992,15 @@ async function gmailAutoSync(silent = true) {
       imported++;
     }
 
-    localStorage.setItem('gmail_last_sync', new Date().toISOString().split('T')[0].replace(/-/g, '/'));
+    localStorage.setItem('gmail_last_sync_date', new Date().toISOString().split('T')[0].replace(/-/g, '/'));
+    localStorage.setItem('gmail_last_sync', formatSyncTime());
+
+    console.log(`Gmail sync done: ${imported} imported, ${skippedExisting} already existed, ${skippedDismissed} dismissed`);
 
     if (imported > 0) {
-      toast(`${imported} casting(s) importado(s) automaticamente desde Gmail`, 'success');
+      toast(`${imported} casting(s) importado(s) desde Gmail`, 'success');
+    } else if (!silent) {
+      toast(`${data.messages.length} emails encontrados pero ya estaban importados o descartados`, 'info');
     }
 
   } catch (err) {
@@ -1017,8 +1051,8 @@ function renderGmailPanel() {
 
     ${gmailConnected ? `
       <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px;">
-        Ultima sincronizacion: ${lastSync}
-        ${pendingReview > 0 ? ` — <span style="color:var(--warning);font-weight:700;">${pendingReview} casting(s) por revisar</span>` : ''}
+        Ultima sincronizacion: ${lastSync || 'Nunca'}
+        ${pendingReview > 0 ? ` — <span style="color:var(--warning);font-weight:700;">${pendingReview} casting(s) por revisar</span>` : ' — Todo al dia'}
       </div>
 
       <button class="btn btn-primary" id="btn-gmail-sync-now" style="width:100%;margin-bottom:16px;">
@@ -1056,7 +1090,8 @@ function renderGmailPanel() {
   document.getElementById('btn-gmail-connect')?.addEventListener('click', gmailConnect);
   document.getElementById('btn-gmail-disconnect')?.addEventListener('click', gmailDisconnect);
   document.getElementById('btn-gmail-sync-now')?.addEventListener('click', async () => {
-    toast('Sincronizando...', 'info');
+    const btn = document.getElementById('btn-gmail-sync-now');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sincronizando...'; }
     await gmailAutoSync(false);
     renderGmailPanel();
   });
