@@ -117,6 +117,116 @@ const STATUS_GROUPS = [
 
 const ALL_STATUSES = STATUS_GROUPS.flatMap(g => g.statuses);
 
+// ---- Color Themes ----
+const THEMES = {
+  violeta:  { accent: '#8b5cf6', accentLight: '#a78bfa', accentGlow: 'rgba(139,92,246,0.3)', label: 'Violeta' },
+  rosa:     { accent: '#ec4899', accentLight: '#f472b6', accentGlow: 'rgba(236,72,153,0.3)', label: 'Rosa' },
+  dorado:   { accent: '#f59e0b', accentLight: '#fbbf24', accentGlow: 'rgba(245,158,11,0.3)', label: 'Dorado' },
+  azul:     { accent: '#3b82f6', accentLight: '#60a5fa', accentGlow: 'rgba(59,130,246,0.3)', label: 'Azul' },
+  verde:    { accent: '#10b981', accentLight: '#34d399', accentGlow: 'rgba(16,185,129,0.3)', label: 'Verde' },
+  coral:    { accent: '#f97316', accentLight: '#fb923c', accentGlow: 'rgba(249,115,22,0.3)', label: 'Coral' },
+};
+
+function applyTheme(themeKey) {
+  const theme = THEMES[themeKey] || THEMES.violeta;
+  document.documentElement.style.setProperty('--accent', theme.accent);
+  document.documentElement.style.setProperty('--accent-light', theme.accentLight);
+  document.documentElement.style.setProperty('--accent-glow', theme.accentGlow);
+  localStorage.setItem('castboard_theme', themeKey);
+}
+
+// ---- Confetti ----
+function launchConfetti() {
+  const canvas = document.createElement('canvas');
+  canvas.id = 'confetti-canvas';
+  canvas.style.cssText = 'position:fixed;inset:0;z-index:99999;pointer-events:none;';
+  document.body.appendChild(canvas);
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+
+  const colors = ['#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#fbbf24','#a78bfa'];
+  const particles = [];
+  for (let i = 0; i < 120; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height - canvas.height,
+      w: Math.random() * 10 + 5,
+      h: Math.random() * 6 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 4,
+      vy: Math.random() * 3 + 2,
+      rotation: Math.random() * 360,
+      rotSpeed: (Math.random() - 0.5) * 10,
+      opacity: 1,
+    });
+  }
+
+  let frame = 0;
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let alive = false;
+    particles.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.05;
+      p.rotation += p.rotSpeed;
+      if (frame > 60) p.opacity -= 0.01;
+      if (p.opacity <= 0) return;
+      alive = true;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation * Math.PI / 180);
+      ctx.globalAlpha = Math.max(0, p.opacity);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    });
+    frame++;
+    if (alive && frame < 200) {
+      requestAnimationFrame(animate);
+    } else {
+      canvas.remove();
+    }
+  }
+  requestAnimationFrame(animate);
+}
+
+// ---- Birthday Check ----
+function checkBirthday() {
+  const now = new Date();
+  const isBirthday = now.getMonth() === 4 && now.getDate() === 14; // May = 4 (0-indexed)
+  const dismissedKey = 'castboard_bday_dismissed_' + now.getFullYear();
+
+  if (isBirthday && !sessionStorage.getItem(dismissedKey)) {
+    const birthYear = 1996;
+    const age = now.getFullYear() - birthYear;
+    showBirthdayModal(age);
+    sessionStorage.setItem(dismissedKey, 'true');
+  }
+}
+
+function showBirthdayModal(age) {
+  const overlay = document.createElement('div');
+  overlay.className = 'birthday-overlay';
+  overlay.innerHTML = `
+    <div class="birthday-card">
+      <div class="birthday-emoji">🎂</div>
+      <h1 class="birthday-title">MUCHAS FELICIDADES LAURA!!!</h1>
+      <p class="birthday-age">Hoy cumples ${age} anitos</p>
+      <p class="birthday-hearts">&lt;3 :)</p>
+      <button class="btn btn-primary birthday-close" style="margin-top:20px;">Gracias! 💜</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  launchConfetti();
+
+  overlay.querySelector('.birthday-close').addEventListener('click', () => {
+    overlay.classList.add('birthday-fade-out');
+    setTimeout(() => overlay.remove(), 500);
+  });
+}
+
 // ---- App State ----
 let castings = [];
 let currentView = 'calendar';
@@ -722,9 +832,22 @@ async function saveCasting() {
     updatedAt: editingId ? Date.now() : null,
   };
 
+  // Check if status changed to a celebration-worthy state
+  const oldCasting = editingId ? castings.find(c => c.id === editingId) : null;
+  const celebrationStatuses = ['booked', 'callback', 'filming'];
+  const isNewCelebration = celebrationStatuses.includes(casting.status) &&
+    (!oldCasting || oldCasting.status !== casting.status);
+
   await store.put(casting);
   closeAllModals();
-  toast(editingId ? 'Casting actualizado' : 'Casting creado', 'success');
+
+  if (isNewCelebration) {
+    const statusLabel = STATUSES[casting.status]?.label || casting.status;
+    toast(`${casting.project} — ${statusLabel}! 🎉`, 'success');
+    launchConfetti();
+  } else {
+    toast(editingId ? 'Casting actualizado' : 'Casting creado', 'success');
+  }
   editingId = null;
 }
 
@@ -1255,6 +1378,124 @@ async function importData(file) {
   }
 }
 
+// ---- Statistics ----
+
+function renderStatsView() {
+  const el = document.getElementById('view-stats');
+  if (!el) return;
+
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+
+  // Group castings by month (last 6 months)
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(thisYear, thisMonth - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleDateString('es-ES', { month: 'short' });
+    const monthCastings = castings.filter(c => (c.date || '').startsWith(key) || (!c.date && c.createdAt && new Date(c.createdAt).getMonth() === d.getMonth() && new Date(c.createdAt).getFullYear() === d.getFullYear()));
+    months.push({ key, label, castings: monthCastings, count: monthCastings.length });
+  }
+
+  const maxCount = Math.max(...months.map(m => m.count), 1);
+  const totalAll = castings.length;
+  const accepted = castings.filter(c => c.status === 'booked' || c.status === 'filming').length;
+  const callbacks = castings.filter(c => c.status === 'callback').length;
+  const pending = castings.filter(c => c.status === 'pending' || c.status === 'recorded' || c.status === 'sent').length;
+  const rejected = castings.filter(c => c.status === 'rejected').length;
+  const rate = totalAll > 0 ? Math.round((accepted / totalAll) * 100) : 0;
+
+  // By project type
+  const byType = {};
+  castings.forEach(c => {
+    const t = c.projectType || 'sin tipo';
+    byType[t] = (byType[t] || 0) + 1;
+  });
+
+  el.innerHTML = `
+    <div class="stats-section">
+      <h3 class="stats-section-title">Resumen general</h3>
+      <div class="stats-overview">
+        <div class="stats-overview-item">
+          <span class="stats-overview-number" style="color:var(--accent)">${totalAll}</span>
+          <span class="stats-overview-label">Total castings</span>
+        </div>
+        <div class="stats-overview-item">
+          <span class="stats-overview-number" style="color:var(--success)">${accepted}</span>
+          <span class="stats-overview-label">Aceptados</span>
+        </div>
+        <div class="stats-overview-item">
+          <span class="stats-overview-number" style="color:var(--warning)">${callbacks}</span>
+          <span class="stats-overview-label">Callbacks</span>
+        </div>
+        <div class="stats-overview-item">
+          <span class="stats-overview-number" style="color:var(--info)">${pending}</span>
+          <span class="stats-overview-label">En proceso</span>
+        </div>
+      </div>
+      ${totalAll > 0 ? `
+        <div class="stats-rate">
+          <div class="stats-rate-bar">
+            <div class="stats-rate-fill" style="width:${rate}%;background:var(--success);"></div>
+          </div>
+          <span class="stats-rate-label">Tasa de aceptacion: <strong>${rate}%</strong> (${accepted}/${totalAll})</span>
+        </div>
+      ` : ''}
+    </div>
+
+    <div class="stats-section">
+      <h3 class="stats-section-title">Ultimos 6 meses</h3>
+      <div class="stats-chart">
+        ${months.map(m => `
+          <div class="stats-bar-col">
+            <div class="stats-bar-value">${m.count}</div>
+            <div class="stats-bar-track">
+              <div class="stats-bar-fill" style="height:${(m.count / maxCount) * 100}%"></div>
+            </div>
+            <div class="stats-bar-label">${m.label}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    ${Object.keys(byType).length > 0 ? `
+      <div class="stats-section">
+        <h3 class="stats-section-title">Por tipo de proyecto</h3>
+        <div class="stats-type-list">
+          ${Object.entries(byType).sort((a,b) => b[1] - a[1]).map(([type, count]) => `
+            <div class="stats-type-row">
+              <span class="stats-type-name">${type}</span>
+              <div class="stats-type-bar-track">
+                <div class="stats-type-bar-fill" style="width:${(count / totalAll) * 100}%"></div>
+              </div>
+              <span class="stats-type-count">${count}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+// ---- Theme Picker (in Settings) ----
+
+function renderThemePicker() {
+  const container = document.getElementById('theme-picker');
+  if (!container) return;
+  const currentTheme = localStorage.getItem('castboard_theme') || 'violeta';
+  container.innerHTML = Object.entries(THEMES).map(([key, t]) => `
+    <button class="theme-swatch ${key === currentTheme ? 'active' : ''}" data-theme="${key}" style="background:${t.accent};" title="${t.label}"></button>
+  `).join('');
+  container.querySelectorAll('.theme-swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyTheme(btn.dataset.theme);
+      container.querySelectorAll('.theme-swatch').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+}
+
 // ---- Render All ----
 
 function renderAll() {
@@ -1262,6 +1503,8 @@ function renderAll() {
   renderFilters();
   if (currentView === 'calendar') {
     renderCalendar();
+  } else if (currentView === 'stats') {
+    renderStatsView();
   } else {
     renderKanban();
   }
@@ -1294,6 +1537,7 @@ function setupEvents() {
       document.getElementById('settings-user-info').textContent =
         `Conectado como: ${currentUser.displayName || currentUser.email}`;
     }
+    renderThemePicker();
     openModal('modal-settings');
   });
 
@@ -1389,6 +1633,9 @@ function onUserSignedIn(user) {
     setTimeout(() => gmailAutoSync(true), 2000);
   }
 
+  // Check birthday
+  checkBirthday();
+
   console.log("Dickmanns' CastBoard initialized for", user.displayName || user.email);
 }
 
@@ -1408,6 +1655,10 @@ function onUserSignedOut() {
 // ---- Main Init ----
 
 async function init() {
+  // Apply saved theme
+  const savedTheme = localStorage.getItem('castboard_theme');
+  if (savedTheme) applyTheme(savedTheme);
+
   setupEvents();
   registerSW();
 

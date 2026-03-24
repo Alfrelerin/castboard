@@ -1063,6 +1063,267 @@ body {
   font-weight: 600;
 }
 
+/* ---- Theme Picker ---- */
+.theme-picker {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.theme-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.theme-swatch:hover {
+  transform: scale(1.15);
+}
+
+.theme-swatch.active {
+  border-color: var(--text-primary);
+  transform: scale(1.15);
+  box-shadow: 0 0 12px rgba(255,255,255,0.2);
+}
+
+/* ---- Birthday Modal ---- */
+.birthday-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.5s ease;
+}
+
+.birthday-overlay.birthday-fade-out {
+  animation: fadeOut 0.5s ease forwards;
+}
+
+.birthday-card {
+  text-align: center;
+  padding: 48px 36px;
+  background: linear-gradient(135deg, #1a1a2e, #2a1a3e);
+  border-radius: 24px;
+  border: 2px solid var(--accent);
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 0 40px var(--accent-glow);
+  animation: birthdayBounce 0.6s ease;
+}
+
+.birthday-emoji {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  animation: birthdayPulse 1s ease infinite alternate;
+}
+
+.birthday-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+}
+
+.birthday-age {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.birthday-hearts {
+  font-size: 1.8rem;
+  color: var(--accent-light);
+  margin-top: 8px;
+}
+
+@keyframes birthdayBounce {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes birthdayPulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.15); }
+}
+
+@keyframes fadeOut {
+  to { opacity: 0; }
+}
+
+/* ---- Statistics View ---- */
+.stats-section {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.stats-section-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stats-overview-item {
+  text-align: center;
+}
+
+.stats-overview-number {
+  display: block;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.stats-overview-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+.stats-rate {
+  margin-top: 12px;
+}
+
+.stats-rate-bar {
+  height: 8px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.stats-rate-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.stats-rate-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.stats-chart {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  height: 160px;
+}
+
+.stats-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.stats-bar-value {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.stats-bar-track {
+  flex: 1;
+  width: 100%;
+  max-width: 40px;
+  background: var(--bg-primary);
+  border-radius: 6px 6px 0 0;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.stats-bar-fill {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 6px 6px 0 0;
+  min-height: 4px;
+  transition: height 0.6s ease;
+}
+
+.stats-bar-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  text-transform: capitalize;
+}
+
+.stats-type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stats-type-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stats-type-name {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  min-width: 80px;
+  text-transform: capitalize;
+}
+
+.stats-type-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stats-type-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.stats-type-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 24px;
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  .stats-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .stats-overview-number {
+    font-size: 1.5rem;
+  }
+}
+
 /* ---- Print ---- */
 @media print {
   .header, .modal-overlay, .modal, .toast-container, .btn { display: none !important; }

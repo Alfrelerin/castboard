@@ -49,6 +49,7 @@
       <div class="view-tabs">
         <button class="view-tab active" data-view="calendar">Calendario</button>
         <button class="view-tab" data-view="kanban">Tablero</button>
+        <button class="view-tab" data-view="stats">Stats</button>
       </div>
       <div class="header-actions">
         <img id="user-avatar" class="user-avatar" src="" alt="" style="display:none;width:28px;height:28px;border-radius:50%;cursor:pointer;" title="Cuenta">
@@ -83,6 +84,9 @@
 
     <!-- Kanban View -->
     <div id="view-kanban" class="view-content" style="display:none"></div>
+
+    <!-- Stats View -->
+    <div id="view-stats" class="view-content" style="display:none"></div>
   </main>
 
   <!-- Modal Overlay -->
@@ -227,6 +231,13 @@
       </button>
     </div>
     <div class="modal-body">
+      <div class="config-section">
+        <h3>Tema de color</h3>
+        <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;">
+          Elige el color principal de la app.
+        </p>
+        <div id="theme-picker" class="theme-picker"></div>
+      </div>
       <div class="config-section">
         <h3>Calendario</h3>
         <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;">
