@@ -16,8 +16,8 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
-// Fix for Safari: force long polling to avoid WebChannel CORS issues
-db.settings({ experimentalAutoDetectLongPolling: true, merge: true });
+// Fix for Safari: force long polling to completely avoid WebChannel CORS issues
+db.settings({ experimentalForceLongPolling: true, merge: true });
 
 // ---- Cloud Store (Firestore) ----
 let currentUser = null;
@@ -1071,32 +1071,47 @@ async function gmailConnect() {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope(GMAIL_SCOPES);
-    // Force account selection to always get a fresh credential with accessToken
     provider.setCustomParameters({ prompt: 'consent' });
 
-    // Always use signInWithPopup — it returns credential with accessToken
-    const result = await auth.signInWithPopup(provider);
-    console.log('Gmail connect result:', result);
-
-    const accessToken = result.credential?.accessToken;
-    console.log('Access token obtained:', !!accessToken);
-
-    if (accessToken) {
-      gmailToken = accessToken;
-      gmailConnected = true;
-      renderGmailPanel();
-      toast('Conectado a Gmail. Buscando emails...', 'success');
-      await gmailAutoSync(false);
-      renderGmailPanel();
-      startAutoSync();
-    } else {
-      toast('No se pudo obtener el token de Gmail. Intenta de nuevo.', 'error');
-      console.log('Full result object:', result);
-      console.log('result.credential:', result.credential);
+    let result;
+    try {
+      // Try popup first (works on most browsers)
+      result = await auth.signInWithPopup(provider);
+    } catch (popupErr) {
+      // If popup blocked (common in Safari), fall back to redirect
+      if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/popup-closed-by-user') {
+        console.log('Popup blocked, falling back to redirect...');
+        toast('Redirigiendo a Google para conectar Gmail...', 'info');
+        // Store flag so we know to check for Gmail token on redirect return
+        sessionStorage.setItem('castboard_gmail_redirect', 'true');
+        await auth.signInWithRedirect(provider);
+        return; // Page will redirect
+      }
+      throw popupErr;
     }
+
+    console.log('Gmail connect result:', result);
+    handleGmailResult(result);
   } catch (err) {
     console.error('Gmail connect error code:', err.code, 'message:', err.message);
     toast('Error al conectar con Gmail: ' + err.message, 'error');
+  }
+}
+
+function handleGmailResult(result) {
+  const accessToken = result.credential?.accessToken;
+  console.log('Access token obtained:', !!accessToken);
+
+  if (accessToken) {
+    gmailToken = accessToken;
+    gmailConnected = true;
+    renderGmailPanel();
+    toast('Conectado a Gmail. Buscando emails...', 'success');
+    gmailAutoSync(false).then(() => renderGmailPanel());
+    startAutoSync();
+  } else {
+    toast('No se pudo obtener el token de Gmail. Intenta de nuevo.', 'error');
+    console.log('result.credential:', result.credential);
   }
 }
 
@@ -1114,16 +1129,22 @@ async function loginWithGoogle() {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope(GMAIL_SCOPES);
-    const result = await auth.signInWithPopup(provider);
+
+    let result;
+    try {
+      result = await auth.signInWithPopup(provider);
+    } catch (popupErr) {
+      if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/popup-closed-by-user') {
+        console.log('Popup blocked on login, using redirect...');
+        sessionStorage.setItem('castboard_gmail_redirect', 'true');
+        await auth.signInWithRedirect(provider);
+        return;
+      }
+      throw popupErr;
+    }
 
     // Grab Gmail token (compat SDK: result.credential directly)
-    const accessToken = result.credential?.accessToken;
-    if (accessToken) {
-      gmailToken = accessToken;
-      gmailConnected = true;
-      startAutoSync();
-      setTimeout(() => gmailAutoSync(true), 2000);
-    }
+    handleGmailResult(result);
   } catch (err) {
     console.error('Login error:', err);
     toast('Error al iniciar sesion: ' + err.message, 'error');
@@ -1332,9 +1353,23 @@ function onUserSignedOut() {
 
 // ---- Main Init ----
 
-function init() {
+async function init() {
   setupEvents();
   registerSW();
+
+  // Check if returning from a Gmail redirect (Safari fallback)
+  try {
+    const redirectResult = await auth.getRedirectResult();
+    if (redirectResult && redirectResult.credential) {
+      console.log('Got redirect result with credential');
+      if (sessionStorage.getItem('castboard_gmail_redirect')) {
+        sessionStorage.removeItem('castboard_gmail_redirect');
+        handleGmailResult(redirectResult);
+      }
+    }
+  } catch (err) {
+    console.warn('getRedirectResult error:', err);
+  }
 
   // Listen for auth state changes
   auth.onAuthStateChanged((user) => {
