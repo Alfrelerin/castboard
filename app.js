@@ -709,12 +709,21 @@ function openDetail(casting) {
 
   body.querySelectorAll('.detail-status-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
+      const oldStatus = casting.status;
       casting.status = btn.dataset.status;
       casting.updatedAt = Date.now();
       await store.put(casting);
-      // onSnapshot will update castings array and re-render
+
+      // Confetti for celebration-worthy status changes
+      const celebrationStatuses = ['booked', 'callback', 'filming'];
+      if (celebrationStatuses.includes(casting.status) && oldStatus !== casting.status) {
+        toast(`${casting.project} — ${STATUSES[casting.status].label}! 🎉`, 'success');
+        launchConfetti();
+      } else {
+        toast(`Estado cambiado a "${STATUSES[casting.status].label}"`);
+      }
+
       openDetail(casting);
-      toast(`Estado cambiado a "${STATUSES[casting.status].label}"`);
     });
   });
 
@@ -812,6 +821,9 @@ async function saveCasting() {
     return;
   }
 
+  const oldCasting = editingId ? castings.find(c => c.id === editingId) : null;
+  const isEditing = !!editingId;
+
   const casting = {
     id: editingId || genId(),
     project,
@@ -827,13 +839,14 @@ async function saveCasting() {
     company: document.getElementById('f-company').value.trim(),
     projectType: document.getElementById('f-type').value,
     notes: document.getElementById('f-notes').value.trim(),
-    source: editingId ? (castings.find(c => c.id === editingId)?.source || 'manual') : 'manual',
-    createdAt: editingId ? (castings.find(c => c.id === editingId)?.createdAt || Date.now()) : Date.now(),
-    updatedAt: editingId ? Date.now() : null,
+    source: oldCasting?.source || 'manual',
+    gmailId: oldCasting?.gmailId || null,
+    needsReview: oldCasting ? false : false, // editing always clears review flag
+    createdAt: oldCasting?.createdAt || Date.now(),
+    updatedAt: isEditing ? Date.now() : null,
   };
 
   // Check if status changed to a celebration-worthy state
-  const oldCasting = editingId ? castings.find(c => c.id === editingId) : null;
   const celebrationStatuses = ['booked', 'callback', 'filming'];
   const isNewCelebration = celebrationStatuses.includes(casting.status) &&
     (!oldCasting || oldCasting.status !== casting.status);
@@ -846,7 +859,7 @@ async function saveCasting() {
     toast(`${casting.project} — ${statusLabel}! 🎉`, 'success');
     launchConfetti();
   } else {
-    toast(editingId ? 'Casting actualizado' : 'Casting creado', 'success');
+    toast(isEditing ? 'Casting actualizado' : 'Casting creado', 'success');
   }
   editingId = null;
 }
@@ -1501,6 +1514,18 @@ function renderThemePicker() {
 function renderAll() {
   renderStats();
   renderFilters();
+
+  // Hide search/filters on stats view (they don't apply)
+  const searchEl = document.querySelector('.search-container');
+  const filterEl = document.getElementById('filter-bar');
+  if (currentView === 'stats') {
+    if (searchEl) searchEl.style.display = 'none';
+    if (filterEl) filterEl.style.display = 'none';
+  } else {
+    if (searchEl) searchEl.style.display = '';
+    if (filterEl) filterEl.style.display = '';
+  }
+
   if (currentView === 'calendar') {
     renderCalendar();
   } else if (currentView === 'stats') {
