@@ -56,7 +56,12 @@ const store = {
   listen(onUpdate) {
     if (firestoreUnsubscribe) firestoreUnsubscribe();
     firestoreUnsubscribe = userCastingsRef().onSnapshot(snap => {
-      const data = snap.docs.map(d => d.data());
+      const data = snap.docs.map(d => {
+        const c = d.data();
+        // Migrate removed statuses
+        if (c.status === 'filming') { c.status = 'booked'; userCastingsRef().doc(c.id).update({ status: 'booked' }).catch(() => {}); }
+        return c;
+      });
       onUpdate(data);
     });
   },
@@ -97,7 +102,7 @@ async function dismissCasting(castingId) {
   toast('Casting descartado — no volverá a importarse', 'success');
 }
 
-// ---- Status Config (4 groups) ----
+// ---- Status Config (3 groups) ----
 const STATUSES = {
   pending:   { label: 'Pendiente',           color: '#a78bfa', icon: '📋', group: 'proceso' },
   recorded:  { label: 'Grabado no enviado',  color: '#c4b5fd', icon: '🎬', group: 'proceso' },
@@ -105,15 +110,13 @@ const STATUSES = {
   callback:  { label: 'Callback',            color: '#fbbf24', icon: '📞', group: 'respuesta' },
   optioned:  { label: 'Opcionada',           color: '#60a5fa', icon: '⭐', group: 'respuesta' },
   rejected:  { label: 'Opción caída',        color: '#9ca3af', icon: '📉', group: 'respuesta' },
-  booked:    { label: 'Aceptada',            color: '#34d399', icon: '✅', group: 'aceptada' },
-  filming:   { label: 'En rodaje',           color: '#f472b6', icon: '🎥', group: 'aceptada' },
+  booked:    { label: 'Aceptada',            color: '#34d399', icon: '✅', group: 'respuesta' },
   declined:  { label: 'Rechazado',           color: '#94a3b8', icon: '🚫', group: 'rechazada' },
 };
 
 const STATUS_GROUPS = [
   { key: 'proceso',   label: 'En proceso',   statuses: ['pending', 'recorded', 'sent'] },
-  { key: 'respuesta', label: 'Con respuesta', statuses: ['callback', 'optioned', 'rejected'] },
-  { key: 'aceptada',  label: 'Aceptada',      statuses: ['booked', 'filming'] },
+  { key: 'respuesta', label: 'Con respuesta', statuses: ['callback', 'optioned', 'rejected', 'booked'] },
   { key: 'rechazada', label: 'Rechazada',     statuses: ['declined'] },
 ];
 
@@ -596,7 +599,7 @@ function renderKanban() {
         fiction.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
         other.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
         columns.push({ status: 'sent', items: fiction, label: 'Enviado — Ficción', icon: '🎭' });
-        columns.push({ status: 'sent-other', items: other, label: 'Enviado — Otros', icon: '📤' });
+        columns.push({ status: 'sent-other', items: other, label: 'Enviado — Fifth', icon: '📤' });
       } else {
         const items = filtered.filter(c => c.status === status);
         items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -734,7 +737,7 @@ function openDetail(casting) {
       await store.put(casting);
 
       // Confetti for celebration-worthy status changes
-      const celebrationStatuses = ['booked', 'callback', 'filming'];
+      const celebrationStatuses = ['booked', 'callback'];
       if (celebrationStatuses.includes(casting.status) && oldStatus !== casting.status) {
         toast(`${casting.project} — ${STATUSES[casting.status].label}! 🎉`, 'success');
         launchConfetti();
@@ -866,7 +869,7 @@ async function saveCasting() {
   };
 
   // Check if status changed to a celebration-worthy state
-  const celebrationStatuses = ['booked', 'callback', 'filming'];
+  const celebrationStatuses = ['booked', 'callback'];
   const isNewCelebration = celebrationStatuses.includes(casting.status) &&
     (!oldCasting || oldCasting.status !== casting.status);
 
@@ -1432,7 +1435,7 @@ function renderStatsView() {
 
   const maxCount = Math.max(...months.map(m => m.count), 1);
   const totalAll = castings.length;
-  const accepted = castings.filter(c => c.status === 'booked' || c.status === 'filming').length;
+  const accepted = castings.filter(c => c.status === 'booked').length;
   const callbacks = castings.filter(c => c.status === 'callback').length;
   const pending = castings.filter(c => c.status === 'pending' || c.status === 'recorded' || c.status === 'sent').length;
   const rejected = castings.filter(c => c.status === 'rejected').length;
