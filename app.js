@@ -629,7 +629,7 @@ function renderKanban() {
                     <div style="font-size:0.8rem;margin-top:4px;">Sin elementos</div>
                   </div>
                 ` : col.items.map(c => `
-                  <div class="kanban-card fade-in" data-id="${c.id}">
+                  <div class="kanban-card fade-in" data-id="${c.id}" draggable="true">
                     <div class="kanban-card-title">${escapeHtml(c.project)}</div>
                     <div class="kanban-card-meta">
                       ${c.character || c.role ? `<div class="kanban-card-meta-item">${ICONS.user} ${escapeHtml(c.character || '')}${c.character && c.role ? ' — ' : ''}${escapeHtml(c.role || '')}</div>` : ''}
@@ -653,10 +653,54 @@ function renderKanban() {
     `;
   }).join('');
 
+  // Click to open detail
   el.querySelectorAll('.kanban-card').forEach(card => {
     card.addEventListener('click', () => {
       const casting = castings.find(c => c.id === card.dataset.id);
       if (casting) openDetail(casting);
+    });
+  });
+
+  // Drag & Drop
+  el.querySelectorAll('.kanban-card').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+      card.classList.add('dragging');
+      setTimeout(() => card.style.opacity = '0.4', 0);
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      card.style.opacity = '';
+      document.querySelectorAll('.kanban-cards.drag-over').forEach(z => z.classList.remove('drag-over'));
+    });
+  });
+
+  el.querySelectorAll('.kanban-cards').forEach(zone => {
+    zone.addEventListener('dragover', e => {
+      e.preventDefault();
+      zone.classList.add('drag-over');
+    });
+    zone.addEventListener('dragleave', () => {
+      zone.classList.remove('drag-over');
+    });
+    zone.addEventListener('drop', async e => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      const castingId = e.dataTransfer.getData('text/plain');
+      let newStatus = zone.dataset.status;
+      // sent-other is a virtual column — actual status is 'sent'
+      if (newStatus === 'sent-other') newStatus = 'sent';
+      const casting = castings.find(c => c.id === castingId);
+      if (!casting || casting.status === newStatus) return;
+      casting.status = newStatus;
+      await DB.save(casting);
+      // Celebration for booked or callback
+      if (['booked', 'callback'].includes(newStatus)) {
+        launchConfetti();
+        showToast(`${STATUSES[newStatus].icon} ${casting.project} → ${STATUSES[newStatus].label}`);
+      } else {
+        showToast(`${STATUSES[newStatus].icon} ${casting.project} → ${STATUSES[newStatus].label}`);
+      }
     });
   });
 }
@@ -692,6 +736,19 @@ function openDetail(casting) {
       ${detailField(ICONS.user, 'Director/a de casting', casting.director)}
       ${detailField(ICONS.building, 'Productora / Agencia', casting.company)}
       ${detailField(ICONS.film, 'Tipo de proyecto', casting.projectType)}
+      ${casting.tarifas && casting.tarifas.length > 0 ? `
+        <div class="detail-field">
+          <span class="detail-field-icon">💰</span>
+          <div>
+            <div class="detail-field-label">Tarifas</div>
+            ${casting.tarifas.map(t => {
+              const typeLabels = { rodaje: 'Rodaje', derechos: 'Derechos', derechos_rodaje: 'Derechos + Rodaje' };
+              return `<div class="detail-field-value" style="margin-bottom:2px;">${t.amount.toLocaleString('es-ES')} € — ${typeLabels[t.type] || t.type}</div>`;
+            }).join('')}
+            ${casting.tarifas.length > 1 ? `<div class="detail-field-value" style="font-weight:700;margin-top:4px;color:var(--success);">Total: ${casting.tarifas.reduce((s,t) => s + t.amount, 0).toLocaleString('es-ES')} €</div>` : ''}
+          </div>
+        </div>
+      ` : ''}
     </div>
 
     ${casting.needsReview ? `
@@ -791,6 +848,33 @@ function detailField(icon, label, value, rawHtml = false) {
 
 // ---- Form (Create/Edit) ----
 
+// ---- Tarifas (fees) ----
+let currentTarifas = [];
+
+function renderTarifas() {
+  const list = document.getElementById('f-tarifas-list');
+  list.innerHTML = currentTarifas.map((t, i) => `
+    <div class="tarifa-row" data-index="${i}">
+      <input type="number" class="form-input tarifa-amount" value="${t.amount || ''}" placeholder="0" min="0" step="0.01" style="width:100px;">
+      <span style="color:var(--text-muted);font-size:0.85rem;">€</span>
+      <select class="form-select tarifa-type" style="flex:1;">
+        <option value="rodaje" ${t.type === 'rodaje' ? 'selected' : ''}>Rodaje</option>
+        <option value="derechos" ${t.type === 'derechos' ? 'selected' : ''}>Derechos</option>
+        <option value="derechos_rodaje" ${t.type === 'derechos_rodaje' ? 'selected' : ''}>Derechos + Rodaje</option>
+      </select>
+      <button type="button" class="btn btn-ghost btn-icon tarifa-remove" title="Quitar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.tarifa-row').forEach((row, i) => {
+    row.querySelector('.tarifa-amount').addEventListener('input', e => { currentTarifas[i].amount = parseFloat(e.target.value) || 0; });
+    row.querySelector('.tarifa-type').addEventListener('change', e => { currentTarifas[i].type = e.target.value; });
+    row.querySelector('.tarifa-remove').addEventListener('click', () => { currentTarifas.splice(i, 1); renderTarifas(); });
+  });
+}
+
 function openForm(casting = null, presetDate = null) {
   editingId = casting ? casting.id : null;
   const title = document.getElementById('modal-form-title');
@@ -812,15 +896,18 @@ function openForm(casting = null, presetDate = null) {
     document.getElementById('f-company').value = casting.company || '';
     document.getElementById('f-type').value = casting.projectType || '';
     document.getElementById('f-notes').value = casting.notes || '';
+    currentTarifas = (casting.tarifas || []).map(t => ({ ...t }));
   } else {
     title.textContent = 'Nuevo Casting';
     deleteBtn.style.display = 'none';
     document.getElementById('casting-form').reset();
+    currentTarifas = [];
     if (presetDate) {
       document.getElementById('f-date').value = presetDate;
     }
   }
 
+  renderTarifas();
   updateDeadlineVisibility();
   openModal('modal-form');
   setTimeout(() => document.getElementById('f-project').focus(), 300);
@@ -861,6 +948,7 @@ async function saveCasting() {
     company: document.getElementById('f-company').value.trim(),
     projectType: document.getElementById('f-type').value,
     notes: document.getElementById('f-notes').value.trim(),
+    tarifas: currentTarifas.filter(t => t.amount > 0),
     source: oldCasting?.source || 'manual',
     gmailId: oldCasting?.gmailId || null,
     needsReview: oldCasting ? false : false, // editing always clears review flag
@@ -1611,6 +1699,10 @@ function setupEvents() {
   document.getElementById('btn-save').addEventListener('click', saveCasting);
   document.getElementById('btn-delete').addEventListener('click', deleteCasting);
   document.getElementById('btn-cancel').addEventListener('click', closeAllModals);
+  document.getElementById('btn-add-tarifa').addEventListener('click', () => {
+    currentTarifas.push({ amount: 0, type: 'rodaje' });
+    renderTarifas();
+  });
 
   document.getElementById('search-input').addEventListener('input', (e) => {
     searchQuery = e.target.value;
@@ -1646,7 +1738,18 @@ function setupEvents() {
 
 function registerSW() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(err => {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      // Check for updates every 60s
+      setInterval(() => reg.update(), 60000);
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        newSW.addEventListener('statechange', () => {
+          if (newSW.state === 'activated') {
+            window.location.reload();
+          }
+        });
+      });
+    }).catch(err => {
       console.log('SW registration failed:', err);
     });
   }

@@ -390,6 +390,19 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
+.kanban-card.dragging {
+  opacity: 0.4;
+  transform: rotate(2deg);
+}
+
+.kanban-cards.drag-over {
+  background: rgba(167,139,250,0.08);
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-sm);
+  min-height: 60px;
+  transition: all 0.2s;
+}
+
 .kanban-card-title {
   font-size: 0.9rem;
   font-weight: 700;
@@ -551,6 +564,20 @@ body {
 .form-textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+.tarifa-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tarifa-row .form-input,
+.tarifa-row .form-select {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 0.85rem;
 }
 
 .form-select {
