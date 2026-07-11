@@ -292,18 +292,19 @@ function deadlineInfo(casting) {
   today.setHours(0, 0, 0, 0);
   const dl = new Date(casting.deadline + 'T00:00:00');
   const diff = Math.ceil((dl - today) / (1000 * 60 * 60 * 24));
+  const timeStr = casting.deadlineTime || casting.time || '';
   let urgency = 'ok';
   let label = '';
   if (diff < 0) { urgency = 'overdue'; label = `Vencida hace ${Math.abs(diff)}d`; }
-  else if (diff === 0) { urgency = 'today'; label = 'Hoy'; }
-  else if (diff === 1) { urgency = 'urgent'; label = 'Manana'; }
-  else if (diff <= 3) { urgency = 'urgent'; label = `En ${diff} dias`; }
-  else { label = formatDate(casting.deadline); }
+  else if (diff === 0) { urgency = 'today'; label = 'Hoy' + (timeStr ? ' a las ' + timeStr : ''); }
+  else if (diff === 1) { urgency = 'urgent'; label = 'Manana' + (timeStr ? ' a las ' + timeStr : ''); }
+  else if (diff <= 3) { urgency = 'urgent'; label = `En ${diff} dias` + (timeStr ? ' (' + timeStr + ')' : ''); }
+  else { label = formatDate(casting.deadline) + (timeStr ? ' a las ' + timeStr : ''); }
   return { urgency, label, diff };
 }
 
 function getFilteredCastings() {
-  let filtered = [...castings];
+  let filtered = castings.filter(c => !c.archived);
   if (currentFilter !== 'all') {
     filtered = filtered.filter(c => c.status === currentFilter);
   }
@@ -483,18 +484,40 @@ function renderCalendar() {
 
   const eventsByDate = {};
   filtered.forEach(c => {
-    if (c.date) {
+    if (c.archived) return; // Skip archived castings in calendar
+    const isPendingOrRecorded = c.status === 'pending' || c.status === 'recorded';
+
+    if (isPendingOrRecorded && c.date && c.deadline) {
+      // Show range from start date to deadline (all days marked)
+      let d = new Date(c.date + 'T00:00:00');
+      const end = new Date(c.deadline + 'T00:00:00');
+      while (d < end) {
+        const key = d.toISOString().split('T')[0];
+        if (!eventsByDate[key]) eventsByDate[key] = [];
+        eventsByDate[key].push({ ...c, _eventType: 'range' });
+        d.setDate(d.getDate() + 1);
+      }
+      // Deadline day shows with clock icon and time
+      if (!eventsByDate[c.deadline]) eventsByDate[c.deadline] = [];
+      eventsByDate[c.deadline].push({ ...c, _eventType: 'deadline' });
+    } else if (isPendingOrRecorded && c.deadline) {
+      // Only deadline, no start date
+      if (!eventsByDate[c.deadline]) eventsByDate[c.deadline] = [];
+      eventsByDate[c.deadline].push({ ...c, _eventType: 'deadline' });
+    } else if (c.date) {
+      // Normal event (sent, booked, etc.) — only show start date
       if (!eventsByDate[c.date]) eventsByDate[c.date] = [];
-      eventsByDate[c.date].push(c);
+      eventsByDate[c.date].push({ ...c, _eventType: 'casting' });
     }
-    if (c.dateEnd && c.date) {
+    // Multi-day events (dateEnd) for non-pending castings (e.g. booked shoots)
+    if (c.dateEnd && c.date && !isPendingOrRecorded) {
       let d = new Date(c.date + 'T00:00:00');
       const end = new Date(c.dateEnd + 'T00:00:00');
       d.setDate(d.getDate() + 1);
       while (d <= end) {
         const key = d.toISOString().split('T')[0];
         if (!eventsByDate[key]) eventsByDate[key] = [];
-        eventsByDate[key].push(c);
+        eventsByDate[key].push({ ...c, _eventType: 'casting' });
         d.setDate(d.getDate() + 1);
       }
     }
@@ -522,11 +545,13 @@ function renderCalendar() {
 
     html += `<div class="calendar-day ${isToday ? 'today' : ''}" data-date="${dateStr}">
       <div class="calendar-day-number">${day}</div>
-      ${events.slice(0, 3).map(e => `
-        <div class="calendar-event status-${e.status}" data-id="${e.id}" title="${e.project}">
-          ${e.project}
-        </div>
-      `).join('')}
+      ${events.slice(0, 3).map(e => {
+        const cls = e._eventType === 'deadline' ? 'calendar-deadline' : e._eventType === 'range' ? 'calendar-range' : `status-${e.status}`;
+        const prefix = e._eventType === 'deadline' ? '⏰ ' : e._eventType === 'range' ? '· ' : '';
+        const suffix = e._eventType === 'deadline' && (e.deadlineTime || e.time) ? ' ' + (e.deadlineTime || e.time) : '';
+        const titleAttr = e._eventType === 'deadline' ? '⏰ Deadline: ' + e.project : e.project;
+        return `<div class="calendar-event ${cls}" data-id="${e.id}" title="${titleAttr}">${prefix}${e.project}${suffix}</div>`;
+      }).join('')}
       ${events.length > 3 ? `<div style="font-size:0.65rem;color:var(--text-muted);">+${events.length - 3} mas</div>` : ''}
     </div>`;
   }
@@ -778,11 +803,18 @@ function openDetail(casting) {
       <p style="font-size:0.9rem;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap;">${escapeHtml(casting.notes)}</p>
     </div>` : ''}
 
+    <div style="text-align:center;margin:16px 0 8px;">
+      <button class="btn btn-secondary btn-sm" id="btn-archive-casting">
+        ${casting.archived ? '📂 Desarchivar' : '📦 Archivar'}
+      </button>
+    </div>
+
     <div class="detail-section">
       <div class="detail-section-title">Metadatos</div>
       ${detailField(null, 'Origen', casting.source === 'gmail' ? 'Importado de Gmail' : 'Entrada manual')}
       ${detailField(null, 'Creado', new Date(casting.createdAt).toLocaleString('es-ES'))}
       ${casting.updatedAt ? detailField(null, 'Actualizado', new Date(casting.updatedAt).toLocaleString('es-ES')) : ''}
+      ${casting.archived ? detailField(null, 'Estado', '📦 Archivado') : ''}
     </div>
   `;
 
@@ -829,6 +861,14 @@ function openDetail(casting) {
   document.getElementById('btn-export-ical').onclick = () => {
     exportICalSingle(casting);
   };
+
+  document.getElementById('btn-archive-casting')?.addEventListener('click', async () => {
+    casting.archived = !casting.archived;
+    casting.updatedAt = Date.now();
+    await DB.save(casting);
+    toast(casting.archived ? '📦 Casting archivado' : '📂 Casting desarchivado');
+    openDetail(casting);
+  });
 
   openModal('modal-detail');
 }
@@ -888,8 +928,8 @@ function openForm(casting = null, presetDate = null) {
     document.getElementById('f-role').value = casting.role || '';
     document.getElementById('f-status').value = casting.status || 'pending';
     document.getElementById('f-date').value = casting.date || '';
-    document.getElementById('f-time').value = casting.time || '';
     document.getElementById('f-deadline').value = casting.deadline || '';
+    document.getElementById('f-deadline-time').value = casting.deadlineTime || casting.time || '';
     document.getElementById('f-date-end').value = casting.dateEnd || '';
     document.getElementById('f-location').value = casting.location || '';
     document.getElementById('f-director').value = casting.director || '';
@@ -940,8 +980,9 @@ async function saveCasting() {
     role: document.getElementById('f-role').value.trim(),
     status: document.getElementById('f-status').value,
     date: document.getElementById('f-date').value,
-    time: document.getElementById('f-time').value,
+    time: '', // deprecated, kept for compat
     deadline: document.getElementById('f-deadline').value,
+    deadlineTime: document.getElementById('f-deadline-time').value,
     dateEnd: document.getElementById('f-date-end').value,
     location: document.getElementById('f-location').value.trim(),
     director: document.getElementById('f-director').value.trim(),
