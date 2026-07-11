@@ -580,32 +580,49 @@ function renderCalendar() {
 
 // ---- Kanban (Grouped) ----
 
+const FICTION_TYPES = ['cine', 'serie', 'corto'];
+
 function renderKanban() {
   const el = document.getElementById('view-kanban');
   const filtered = getFilteredCastings();
 
   el.innerHTML = STATUS_GROUPS.map(group => {
-    const columns = group.statuses.map(status => {
-      const items = filtered.filter(c => c.status === status);
-      items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-      return { status, items };
+    const columns = [];
+    group.statuses.forEach(status => {
+      if (status === 'sent') {
+        const allSent = filtered.filter(c => c.status === 'sent');
+        const fiction = allSent.filter(c => FICTION_TYPES.includes((c.projectType || '').toLowerCase()));
+        const other = allSent.filter(c => !FICTION_TYPES.includes((c.projectType || '').toLowerCase()));
+        fiction.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        other.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        columns.push({ status: 'sent', items: fiction, label: 'Enviado — Ficción', icon: '🎭' });
+        columns.push({ status: 'sent-other', items: other, label: 'Enviado — Otros', icon: '📤' });
+      } else {
+        const items = filtered.filter(c => c.status === status);
+        items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+        columns.push({ status, items });
+      }
     });
 
     return `
       <div class="kanban-group">
         <div class="kanban-group-title group-${group.key}">${group.label}</div>
         <div class="kanban-group-columns">
-          ${columns.map(col => `
+          ${columns.map(col => {
+            const colLabel = col.label || STATUSES[col.status].label;
+            const colIcon = col.icon || STATUSES[col.status].icon;
+            const colColor = STATUSES[col.status === 'sent-other' ? 'sent' : col.status].color;
+            return `
             <div class="kanban-column">
               <div class="kanban-column-header">
-                <div class="kanban-column-dot" style="background:${STATUSES[col.status].color}"></div>
-                <span class="kanban-column-title">${STATUSES[col.status].label}</span>
+                <div class="kanban-column-dot" style="background:${colColor}"></div>
+                <span class="kanban-column-title">${colLabel}</span>
                 <span class="kanban-column-count">${col.items.length}</span>
               </div>
               <div class="kanban-cards" data-status="${col.status}">
                 ${col.items.length === 0 ? `
                   <div class="empty-state" style="padding:20px;">
-                    <div style="font-size:1.5rem;opacity:0.3;">${STATUSES[col.status].icon}</div>
+                    <div style="font-size:1.5rem;opacity:0.3;">${colIcon}</div>
                     <div style="font-size:0.8rem;margin-top:4px;">Sin elementos</div>
                   </div>
                 ` : col.items.map(c => `
@@ -627,7 +644,7 @@ function renderKanban() {
                 `).join('')}
               </div>
             </div>
-          `).join('')}
+          `}).join('')}
         </div>
       </div>
     `;
