@@ -97,22 +97,24 @@ async function dismissCasting(castingId) {
   toast('Casting descartado — no volverá a importarse', 'success');
 }
 
-// ---- Status Config (3 groups) ----
+// ---- Status Config (4 groups) ----
 const STATUSES = {
   pending:   { label: 'Pendiente',           color: '#a78bfa', icon: '📋', group: 'proceso' },
   recorded:  { label: 'Grabado no enviado',  color: '#c4b5fd', icon: '🎬', group: 'proceso' },
   sent:      { label: 'Enviado',             color: '#818cf8', icon: '📤', group: 'proceso' },
   callback:  { label: 'Callback',            color: '#fbbf24', icon: '📞', group: 'respuesta' },
   optioned:  { label: 'Opcionada',           color: '#60a5fa', icon: '⭐', group: 'respuesta' },
-  rejected:  { label: 'Rechazada',           color: '#9ca3af', icon: '✗',  group: 'respuesta' },
+  rejected:  { label: 'Opción caída',        color: '#9ca3af', icon: '📉', group: 'respuesta' },
   booked:    { label: 'Aceptada',            color: '#34d399', icon: '✅', group: 'aceptada' },
   filming:   { label: 'En rodaje',           color: '#f472b6', icon: '🎥', group: 'aceptada' },
+  declined:  { label: 'Rechazado',           color: '#94a3b8', icon: '🚫', group: 'rechazada' },
 };
 
 const STATUS_GROUPS = [
   { key: 'proceso',   label: 'En proceso',   statuses: ['pending', 'recorded', 'sent'] },
   { key: 'respuesta', label: 'Con respuesta', statuses: ['callback', 'optioned', 'rejected'] },
   { key: 'aceptada',  label: 'Aceptada',      statuses: ['booked', 'filming'] },
+  { key: 'rechazada', label: 'Rechazada',     statuses: ['declined'] },
 ];
 
 const ALL_STATUSES = STATUS_GROUPS.flatMap(g => g.statuses);
@@ -1417,6 +1419,7 @@ function renderStatsView() {
   const callbacks = castings.filter(c => c.status === 'callback').length;
   const pending = castings.filter(c => c.status === 'pending' || c.status === 'recorded' || c.status === 'sent').length;
   const rejected = castings.filter(c => c.status === 'rejected').length;
+  const declined = castings.filter(c => c.status === 'declined').length;
   const rate = totalAll > 0 ? Math.round((accepted / totalAll) * 100) : 0;
 
   // By project type
@@ -1445,6 +1448,14 @@ function renderStatsView() {
         <div class="stats-overview-item">
           <span class="stats-overview-number" style="color:var(--info)">${pending}</span>
           <span class="stats-overview-label">En proceso</span>
+        </div>
+        <div class="stats-overview-item">
+          <span class="stats-overview-number" style="color:var(--rejected)">${rejected}</span>
+          <span class="stats-overview-label">Opción caída</span>
+        </div>
+        <div class="stats-overview-item">
+          <span class="stats-overview-number" style="color:var(--declined)">${declined}</span>
+          <span class="stats-overview-label">Rechazados</span>
         </div>
       </div>
       ${totalAll > 0 ? `

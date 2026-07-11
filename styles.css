@@ -27,6 +27,7 @@
   --rejected: #9ca3af;
   --booked: #34d399;
   --filming: #f472b6;
+  --declined: #94a3b8;
   --radius: 14px;
   --radius-sm: 10px;
   --radius-lg: 18px;
@@ -301,14 +302,19 @@ body {
   display: block;
 }
 
-.calendar-event.status-pending { background: rgba(167,139,250,0.15); color: #7c3aed; border-left: 2px solid var(--pending); }
-.calendar-event.status-recorded { background: rgba(196,181,253,0.15); color: #7c3aed; border-left: 2px solid var(--recorded); }
-.calendar-event.status-sent { background: rgba(129,140,248,0.15); color: #4f46e5; border-left: 2px solid var(--sent); }
-.calendar-event.status-callback { background: rgba(251,191,36,0.15); color: #b45309; border-left: 2px solid var(--callback); }
-.calendar-event.status-optioned { background: rgba(96,165,250,0.15); color: #2563eb; border-left: 2px solid var(--optioned); }
-.calendar-event.status-rejected { background: rgba(156,163,175,0.15); color: #6b7280; border-left: 2px solid var(--rejected); }
-.calendar-event.status-booked { background: rgba(52,211,153,0.15); color: #059669; border-left: 2px solid var(--booked); }
-.calendar-event.status-filming { background: rgba(244,114,182,0.15); color: #db2777; border-left: 2px solid var(--filming); }
+/* En proceso → rosa */
+.calendar-event.status-pending { background: rgba(244,114,182,0.15); color: #db2777; border-left: 2px solid #f472b6; }
+.calendar-event.status-recorded { background: rgba(244,114,182,0.15); color: #db2777; border-left: 2px solid #f472b6; }
+.calendar-event.status-sent { background: rgba(244,114,182,0.15); color: #db2777; border-left: 2px solid #f472b6; }
+/* Con respuesta → naranja */
+.calendar-event.status-callback { background: rgba(251,146,60,0.15); color: #c2410c; border-left: 2px solid #fb923c; }
+.calendar-event.status-optioned { background: rgba(251,146,60,0.15); color: #c2410c; border-left: 2px solid #fb923c; }
+.calendar-event.status-rejected { background: rgba(251,146,60,0.15); color: #c2410c; border-left: 2px solid #fb923c; }
+/* Aceptada → verde */
+.calendar-event.status-booked { background: rgba(52,211,153,0.15); color: #059669; border-left: 2px solid #34d399; }
+.calendar-event.status-filming { background: rgba(52,211,153,0.15); color: #059669; border-left: 2px solid #34d399; }
+/* Rechazada → gris */
+.calendar-event.status-declined { background: rgba(148,163,184,0.15); color: #64748b; border-left: 2px solid #94a3b8; }
 
 /* ---- Kanban View ---- */
 .kanban-container {
@@ -582,6 +588,7 @@ body {
 .status-badge.rejected { background: rgba(156,163,175,0.12); color: #6b7280; }
 .status-badge.booked { background: rgba(52,211,153,0.12); color: #059669; }
 .status-badge.filming { background: rgba(244,114,182,0.12); color: #db2777; }
+.status-badge.declined { background: rgba(148,163,184,0.12); color: #64748b; }
 
 /* ---- Detail View ---- */
 .detail-status-bar {
@@ -614,6 +621,7 @@ body {
 .detail-status-btn.active.rejected { background: var(--rejected); color: white; }
 .detail-status-btn.active.booked { background: var(--booked); color: white; }
 .detail-status-btn.active.filming { background: var(--filming); color: white; }
+.detail-status-btn.active.declined { background: var(--declined); color: white; }
 
 .detail-section {
   margin-bottom: 20px;
@@ -976,9 +984,10 @@ body {
   border-left: 3px solid;
 }
 
-.kanban-group-title.group-proceso { border-left-color: var(--pending); }
-.kanban-group-title.group-respuesta { border-left-color: var(--callback); }
+.kanban-group-title.group-proceso { border-left-color: #f472b6; }
+.kanban-group-title.group-respuesta { border-left-color: #fb923c; }
 .kanban-group-title.group-aceptada { border-left-color: var(--booked); }
+.kanban-group-title.group-rechazada { border-left-color: var(--declined); }
 
 .kanban-group-columns {
   display: flex;
