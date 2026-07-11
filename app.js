@@ -99,14 +99,14 @@ async function dismissCasting(castingId) {
 
 // ---- Status Config (3 groups) ----
 const STATUSES = {
-  pending:   { label: 'Pendiente',           color: '#8b5cf6', icon: '📋', group: 'proceso' },
-  recorded:  { label: 'Grabado no enviado',  color: '#a78bfa', icon: '🎬', group: 'proceso' },
-  sent:      { label: 'Enviado',             color: '#6366f1', icon: '📤', group: 'proceso' },
-  callback:  { label: 'Callback',            color: '#f59e0b', icon: '📞', group: 'respuesta' },
-  optioned:  { label: 'Opcionada',           color: '#3b82f6', icon: '⭐', group: 'respuesta' },
-  rejected:  { label: 'Rechazada',           color: '#6b7280', icon: '✗',  group: 'respuesta' },
-  booked:    { label: 'Aceptada',            color: '#10b981', icon: '✅', group: 'aceptada' },
-  filming:   { label: 'En rodaje',           color: '#ec4899', icon: '🎥', group: 'aceptada' },
+  pending:   { label: 'Pendiente',           color: '#a78bfa', icon: '📋', group: 'proceso' },
+  recorded:  { label: 'Grabado no enviado',  color: '#c4b5fd', icon: '🎬', group: 'proceso' },
+  sent:      { label: 'Enviado',             color: '#818cf8', icon: '📤', group: 'proceso' },
+  callback:  { label: 'Callback',            color: '#fbbf24', icon: '📞', group: 'respuesta' },
+  optioned:  { label: 'Opcionada',           color: '#60a5fa', icon: '⭐', group: 'respuesta' },
+  rejected:  { label: 'Rechazada',           color: '#9ca3af', icon: '✗',  group: 'respuesta' },
+  booked:    { label: 'Aceptada',            color: '#34d399', icon: '✅', group: 'aceptada' },
+  filming:   { label: 'En rodaje',           color: '#f472b6', icon: '🎥', group: 'aceptada' },
 };
 
 const STATUS_GROUPS = [
@@ -119,12 +119,12 @@ const ALL_STATUSES = STATUS_GROUPS.flatMap(g => g.statuses);
 
 // ---- Color Themes ----
 const THEMES = {
-  violeta:  { accent: '#8b5cf6', accentLight: '#a78bfa', accentGlow: 'rgba(139,92,246,0.3)', label: 'Violeta' },
-  rosa:     { accent: '#ec4899', accentLight: '#f472b6', accentGlow: 'rgba(236,72,153,0.3)', label: 'Rosa' },
-  dorado:   { accent: '#f59e0b', accentLight: '#fbbf24', accentGlow: 'rgba(245,158,11,0.3)', label: 'Dorado' },
-  azul:     { accent: '#3b82f6', accentLight: '#60a5fa', accentGlow: 'rgba(59,130,246,0.3)', label: 'Azul' },
-  verde:    { accent: '#10b981', accentLight: '#34d399', accentGlow: 'rgba(16,185,129,0.3)', label: 'Verde' },
-  coral:    { accent: '#f97316', accentLight: '#fb923c', accentGlow: 'rgba(249,115,22,0.3)', label: 'Coral' },
+  violeta:  { accent: '#a78bfa', accentLight: '#c4b5fd', accentGlow: 'rgba(167,139,250,0.2)', label: 'Violeta' },
+  rosa:     { accent: '#f472b6', accentLight: '#f9a8d4', accentGlow: 'rgba(244,114,182,0.2)', label: 'Rosa' },
+  dorado:   { accent: '#fbbf24', accentLight: '#fde68a', accentGlow: 'rgba(251,191,36,0.2)', label: 'Dorado' },
+  azul:     { accent: '#60a5fa', accentLight: '#93c5fd', accentGlow: 'rgba(96,165,250,0.2)', label: 'Azul' },
+  verde:    { accent: '#34d399', accentLight: '#6ee7b7', accentGlow: 'rgba(52,211,153,0.2)', label: 'Verde' },
+  coral:    { accent: '#fb923c', accentLight: '#fdba74', accentGlow: 'rgba(251,146,60,0.2)', label: 'Coral' },
 };
 
 function applyTheme(themeKey) {
@@ -619,7 +619,7 @@ function renderKanban() {
                     <div class="kanban-card-tags">
                       <span class="tag ${c.source === 'gmail' ? 'tag-gmail' : 'tag-manual'}">${c.source === 'gmail' ? 'Gmail' : 'Manual'}</span>
                       ${c.needsReview ? '<span class="tag tag-review">Por revisar</span>' : ''}
-                      ${c.projectType ? `<span class="tag" style="background:rgba(255,255,255,0.05);color:var(--text-secondary)">${c.projectType}</span>` : ''}
+                      ${c.projectType ? `<span class="tag" style="background:rgba(0,0,0,0.04);color:var(--text-secondary)">${c.projectType}</span>` : ''}
                     </div>
                   </div>
                 `).join('')}

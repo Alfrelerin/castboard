@@ -1,35 +1,37 @@
 /* ============================================
    CastBoard - Casting Management PWA
+   Light Pastel Theme
    ============================================ */
 
 :root {
-  --bg-primary: #0f0f1a;
-  --bg-secondary: #1a1a2e;
-  --bg-card: #232340;
-  --bg-hover: #2a2a4a;
+  --bg-primary: #f8f9fc;
+  --bg-secondary: #ffffff;
+  --bg-card: #f1f3f8;
+  --bg-hover: #e8eaf2;
   --accent: #8b5cf6;
   --accent-light: #a78bfa;
-  --accent-glow: rgba(139, 92, 246, 0.3);
-  --text-primary: #f0f0f5;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  --border: #2d2d4a;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --info: #3b82f6;
-  --pending: #8b5cf6;
-  --recorded: #a78bfa;
-  --sent: #6366f1;
-  --callback: #f59e0b;
-  --optioned: #3b82f6;
-  --rejected: #6b7280;
-  --booked: #10b981;
-  --filming: #ec4899;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-lg: 16px;
-  --shadow: 0 4px 24px rgba(0,0,0,0.3);
+  --accent-glow: rgba(139, 92, 246, 0.15);
+  --text-primary: #1e1e2e;
+  --text-secondary: #5b6078;
+  --text-muted: #8e95a9;
+  --border: #e2e5ef;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --info: #60a5fa;
+  --pending: #a78bfa;
+  --recorded: #c4b5fd;
+  --sent: #818cf8;
+  --callback: #fbbf24;
+  --optioned: #60a5fa;
+  --rejected: #9ca3af;
+  --booked: #34d399;
+  --filming: #f472b6;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 18px;
+  --shadow: 0 2px 16px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.08);
   --transition: 0.2s ease;
 }
 
@@ -55,7 +57,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(15, 15, 26, 0.85);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
@@ -78,12 +80,13 @@ body {
   font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: -0.5px;
+  color: var(--text-primary);
 }
 
 .logo-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, var(--accent), #ec4899);
+  background: linear-gradient(135deg, var(--accent), #f472b6);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -117,7 +120,7 @@ body {
   background: var(--accent);
   color: white;
 }
-.btn-primary:hover { background: var(--accent-light); transform: translateY(-1px); }
+.btn-primary:hover { background: var(--accent-light); transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
 
 .btn-secondary {
   background: var(--bg-card);
@@ -151,7 +154,7 @@ body {
 /* ---- View Tabs ---- */
 .view-tabs {
   display: flex;
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   border-radius: var(--radius-sm);
   padding: 3px;
   gap: 2px;
@@ -162,7 +165,7 @@ body {
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
@@ -173,6 +176,7 @@ body {
 .view-tab.active {
   background: var(--accent);
   color: white;
+  box-shadow: 0 2px 8px var(--accent-glow);
 }
 
 /* ---- Stats Bar ---- */
@@ -191,6 +195,7 @@ body {
   border-radius: var(--radius-sm);
   padding: 14px;
   text-align: center;
+  box-shadow: var(--shadow);
 }
 
 .stat-number {
@@ -227,6 +232,7 @@ body {
   font-size: 1.2rem;
   font-weight: 700;
   text-transform: capitalize;
+  color: var(--text-primary);
 }
 
 .calendar-nav {
@@ -236,7 +242,7 @@ body {
 
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 1px;
   background: var(--border);
   border-radius: var(--radius);
@@ -245,7 +251,7 @@ body {
 }
 
 .calendar-day-header {
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   padding: 10px 4px;
   text-align: center;
   font-size: 0.75rem;
@@ -255,19 +261,21 @@ body {
 }
 
 .calendar-day {
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   min-height: 90px;
   padding: 6px;
   cursor: pointer;
   transition: background var(--transition);
+  overflow: hidden;
+  min-width: 0;
 }
 
-.calendar-day:hover { background: var(--bg-secondary); }
+.calendar-day:hover { background: var(--bg-card); }
 
-.calendar-day.other-month { opacity: 0.3; }
+.calendar-day.other-month { opacity: 0.35; }
 .calendar-day.today {
-  background: rgba(139, 92, 246, 0.1);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  background: rgba(139, 92, 246, 0.06);
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .calendar-day-number {
@@ -277,11 +285,11 @@ body {
   margin-bottom: 4px;
 }
 
-.calendar-day.today .calendar-day-number { color: var(--accent); }
+.calendar-day.today .calendar-day-number { color: var(--accent); font-weight: 700; }
 
 .calendar-event {
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 0.68rem;
   font-weight: 600;
   margin-bottom: 2px;
@@ -289,16 +297,18 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+  max-width: 100%;
+  display: block;
 }
 
-.calendar-event.status-pending { background: rgba(139,92,246,0.2); color: var(--pending); border-left: 2px solid var(--pending); }
-.calendar-event.status-recorded { background: rgba(167,139,250,0.2); color: var(--recorded); border-left: 2px solid var(--recorded); }
-.calendar-event.status-sent { background: rgba(99,102,241,0.2); color: var(--sent); border-left: 2px solid var(--sent); }
-.calendar-event.status-callback { background: rgba(245,158,11,0.2); color: var(--callback); border-left: 2px solid var(--callback); }
-.calendar-event.status-optioned { background: rgba(59,130,246,0.2); color: var(--optioned); border-left: 2px solid var(--optioned); }
-.calendar-event.status-rejected { background: rgba(107,114,128,0.2); color: var(--rejected); border-left: 2px solid var(--rejected); }
-.calendar-event.status-booked { background: rgba(16,185,129,0.2); color: var(--booked); border-left: 2px solid var(--booked); }
-.calendar-event.status-filming { background: rgba(236,72,153,0.2); color: var(--filming); border-left: 2px solid var(--filming); }
+.calendar-event.status-pending { background: rgba(167,139,250,0.15); color: #7c3aed; border-left: 2px solid var(--pending); }
+.calendar-event.status-recorded { background: rgba(196,181,253,0.15); color: #7c3aed; border-left: 2px solid var(--recorded); }
+.calendar-event.status-sent { background: rgba(129,140,248,0.15); color: #4f46e5; border-left: 2px solid var(--sent); }
+.calendar-event.status-callback { background: rgba(251,191,36,0.15); color: #b45309; border-left: 2px solid var(--callback); }
+.calendar-event.status-optioned { background: rgba(96,165,250,0.15); color: #2563eb; border-left: 2px solid var(--optioned); }
+.calendar-event.status-rejected { background: rgba(156,163,175,0.15); color: #6b7280; border-left: 2px solid var(--rejected); }
+.calendar-event.status-booked { background: rgba(52,211,153,0.15); color: #059669; border-left: 2px solid var(--booked); }
+.calendar-event.status-filming { background: rgba(244,114,182,0.15); color: #db2777; border-left: 2px solid var(--filming); }
 
 /* ---- Kanban View ---- */
 .kanban-container {
@@ -349,7 +359,7 @@ body {
 }
 
 .kanban-cards {
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-top: none;
   border-radius: 0 0 var(--radius-sm) var(--radius-sm);
@@ -361,24 +371,26 @@ body {
 }
 
 .kanban-card {
-  background: var(--bg-card);
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 14px;
   cursor: pointer;
   transition: all var(--transition);
+  box-shadow: var(--shadow);
 }
 
 .kanban-card:hover {
   border-color: var(--accent);
   transform: translateY(-2px);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
 }
 
 .kanban-card-title {
   font-size: 0.9rem;
   font-weight: 700;
   margin-bottom: 6px;
+  color: var(--text-primary);
 }
 
 .kanban-card-meta {
@@ -413,9 +425,9 @@ body {
   font-weight: 600;
 }
 
-.tag-gmail { background: rgba(59,130,246,0.15); color: var(--info); }
-.tag-manual { background: rgba(139,92,246,0.15); color: var(--accent-light); }
-.tag-review { background: rgba(245,158,11,0.2); color: var(--warning); animation: pulse 2s infinite; }
+.tag-gmail { background: rgba(96,165,250,0.12); color: #2563eb; }
+.tag-manual { background: rgba(167,139,250,0.12); color: #7c3aed; }
+.tag-review { background: rgba(251,191,36,0.15); color: #b45309; animation: pulse 2s infinite; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -426,7 +438,7 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0,0,0,0.25);
   backdrop-filter: blur(4px);
   z-index: 200;
   opacity: 0;
@@ -454,6 +466,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.08);
 }
 
 .modal-overlay.active + .modal,
@@ -476,6 +489,7 @@ body {
 .modal-title {
   font-size: 1.1rem;
   font-weight: 700;
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -537,7 +551,7 @@ body {
 
 .form-select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235b6078' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 36px;
@@ -560,14 +574,14 @@ body {
   font-weight: 700;
 }
 
-.status-badge.pending { background: rgba(139,92,246,0.15); color: var(--pending); }
-.status-badge.recorded { background: rgba(167,139,250,0.15); color: var(--recorded); }
-.status-badge.sent { background: rgba(99,102,241,0.15); color: var(--sent); }
-.status-badge.callback { background: rgba(245,158,11,0.15); color: var(--callback); }
-.status-badge.optioned { background: rgba(59,130,246,0.15); color: var(--optioned); }
-.status-badge.rejected { background: rgba(107,114,128,0.15); color: var(--rejected); }
-.status-badge.booked { background: rgba(16,185,129,0.15); color: var(--booked); }
-.status-badge.filming { background: rgba(236,72,153,0.15); color: var(--filming); }
+.status-badge.pending { background: rgba(167,139,250,0.12); color: #7c3aed; }
+.status-badge.recorded { background: rgba(196,181,253,0.12); color: #7c3aed; }
+.status-badge.sent { background: rgba(129,140,248,0.12); color: #4f46e5; }
+.status-badge.callback { background: rgba(251,191,36,0.12); color: #b45309; }
+.status-badge.optioned { background: rgba(96,165,250,0.12); color: #2563eb; }
+.status-badge.rejected { background: rgba(156,163,175,0.12); color: #6b7280; }
+.status-badge.booked { background: rgba(52,211,153,0.12); color: #059669; }
+.status-badge.filming { background: rgba(244,114,182,0.12); color: #db2777; }
 
 /* ---- Detail View ---- */
 .detail-status-bar {
@@ -590,7 +604,7 @@ body {
   font-family: inherit;
 }
 
-.detail-status-btn:hover { border-color: var(--text-secondary); }
+.detail-status-btn:hover { border-color: var(--text-muted); background: var(--bg-hover); }
 .detail-status-btn.active { border-color: transparent; }
 .detail-status-btn.active.pending { background: var(--pending); color: white; }
 .detail-status-btn.active.recorded { background: var(--recorded); color: white; }
@@ -642,6 +656,7 @@ body {
 .detail-field-value {
   font-size: 0.9rem;
   margin-top: 2px;
+  color: var(--text-primary);
 }
 
 /* ---- Gmail Panel ---- */
@@ -650,7 +665,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   margin-bottom: 16px;
@@ -662,7 +677,7 @@ body {
   border-radius: 50%;
 }
 
-.gmail-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.gmail-dot.connected { background: var(--success); box-shadow: 0 0 6px rgba(52,211,153,0.5); }
 .gmail-dot.disconnected { background: var(--danger); }
 
 .gmail-status-text {
@@ -699,14 +714,15 @@ body {
 }
 
 .toast {
-  background: var(--bg-card);
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 12px 16px;
   font-size: 0.85rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
   max-width: 320px;
+  color: var(--text-primary);
 }
 
 .toast.success { border-left: 3px solid var(--success); }
@@ -719,7 +735,7 @@ body {
 /* ---- Login Screen ---- */
 .login-screen {
   position: fixed; inset: 0; z-index: 9999;
-  background: var(--bg-primary);
+  background: linear-gradient(145deg, #f0eef8, #fce7f3, #ecf0ff);
   display: flex; align-items: center; justify-content: center;
 }
 .login-screen.hidden { display: none; }
@@ -727,6 +743,7 @@ body {
   text-align: center; padding: 40px 32px;
   background: var(--bg-secondary); border-radius: var(--radius-lg);
   border: 1px solid var(--border); max-width: 360px; width: 90%;
+  box-shadow: var(--shadow-lg);
 }
 .user-avatar { border: 2px solid var(--accent); }
 
@@ -738,7 +755,7 @@ body {
   border-radius: 50%;
   overflow: hidden;
   border: 3px solid var(--accent);
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  box-shadow: 0 0 20px var(--accent-glow);
   animation: loginPhotoGlow 3s ease-in-out infinite alternate;
 }
 
@@ -755,7 +772,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--accent), #6366f1);
+  background: linear-gradient(135deg, var(--accent), #818cf8);
   color: white;
 }
 
@@ -766,8 +783,8 @@ body {
 }
 
 @keyframes loginPhotoGlow {
-  from { box-shadow: 0 0 15px rgba(139, 92, 246, 0.2); }
-  to { box-shadow: 0 0 25px rgba(139, 92, 246, 0.5); }
+  from { box-shadow: 0 0 15px rgba(139, 92, 246, 0.15); }
+  to { box-shadow: 0 0 25px rgba(139, 92, 246, 0.3); }
 }
 
 /* ---- Empty State Hero ---- */
@@ -804,7 +821,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   color: var(--text-muted);
 }
 
@@ -839,10 +856,12 @@ body {
   font-family: inherit;
   outline: none;
   transition: border-color var(--transition);
+  box-shadow: var(--shadow);
 }
 
 .search-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 .search-icon {
@@ -885,7 +904,7 @@ body {
 .filter-chip {
   padding: 5px 12px;
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--bg-secondary);
   color: var(--text-secondary);
   border-radius: 20px;
   font-size: 0.78rem;
@@ -895,8 +914,8 @@ body {
   font-family: inherit;
 }
 
-.filter-chip:hover { border-color: var(--text-secondary); }
-.filter-chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+.filter-chip:hover { border-color: var(--accent); color: var(--accent); }
+.filter-chip.active { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 2px 8px var(--accent-glow); }
 
 /* ---- Gmail Setup Info ---- */
 .setup-info {
@@ -920,11 +939,11 @@ body {
 }
 
 .setup-info code {
-  background: var(--bg-primary);
+  background: var(--bg-hover);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.82rem;
-  color: var(--accent-light);
+  color: var(--accent);
 }
 
 /* ---- Config Panel ---- */
@@ -952,7 +971,7 @@ body {
   color: var(--text-muted);
   margin-bottom: 10px;
   padding: 6px 12px;
-  background: var(--bg-secondary);
+  background: var(--bg-card);
   border-radius: var(--radius-sm);
   border-left: 3px solid;
 }
@@ -1078,7 +1097,7 @@ body {
   border: 3px solid transparent;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .theme-swatch:hover {
@@ -1088,7 +1107,7 @@ body {
 .theme-swatch.active {
   border-color: var(--text-primary);
   transform: scale(1.15);
-  box-shadow: 0 0 12px rgba(255,255,255,0.2);
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 /* ---- Birthday Modal ---- */
@@ -1096,7 +1115,7 @@ body {
   position: fixed;
   inset: 0;
   z-index: 100000;
-  background: rgba(0,0,0,0.8);
+  background: rgba(0,0,0,0.4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1110,12 +1129,12 @@ body {
 .birthday-card {
   text-align: center;
   padding: 48px 36px;
-  background: linear-gradient(135deg, #1a1a2e, #2a1a3e);
+  background: linear-gradient(135deg, #fef3f7, #f5f0ff, #eff6ff);
   border-radius: 24px;
   border: 2px solid var(--accent);
   max-width: 380px;
   width: 90%;
-  box-shadow: 0 0 40px var(--accent-glow);
+  box-shadow: 0 20px 60px rgba(139, 92, 246, 0.2);
   animation: birthdayBounce 0.6s ease;
 }
 
@@ -1169,6 +1188,7 @@ body {
   border: 1px solid var(--border);
   padding: 20px;
   margin-bottom: 16px;
+  box-shadow: var(--shadow);
 }
 
 .stats-section-title {
@@ -1209,7 +1229,7 @@ body {
 
 .stats-rate-bar {
   height: 8px;
-  background: var(--bg-primary);
+  background: var(--bg-card);
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 6px;
@@ -1252,7 +1272,7 @@ body {
   flex: 1;
   width: 100%;
   max-width: 40px;
-  background: var(--bg-primary);
+  background: var(--bg-card);
   border-radius: 6px 6px 0 0;
   overflow: hidden;
   display: flex;
@@ -1296,7 +1316,7 @@ body {
 .stats-type-bar-track {
   flex: 1;
   height: 8px;
-  background: var(--bg-primary);
+  background: var(--bg-card);
   border-radius: 4px;
   overflow: hidden;
 }
