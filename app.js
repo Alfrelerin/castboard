@@ -266,8 +266,12 @@ function genId() {
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr + 'T00:00:00');
+  const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function localDateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function toast(message, type = 'info') {
@@ -483,41 +487,38 @@ function renderCalendar() {
   const filtered = getFilteredCastings();
 
   const eventsByDate = {};
+  function addEvent(dateKey, casting, eventType) {
+    if (!eventsByDate[dateKey]) eventsByDate[dateKey] = [];
+    eventsByDate[dateKey].push({ ...casting, _eventType: eventType });
+  }
+
   filtered.forEach(c => {
-    if (c.archived) return; // Skip archived castings in calendar
+    if (c.archived) return;
     const isPendingOrRecorded = c.status === 'pending' || c.status === 'recorded';
 
     if (isPendingOrRecorded && c.date && c.deadline) {
-      // Show range from start date to deadline (all days marked)
-      let d = new Date(c.date + 'T00:00:00');
-      const end = new Date(c.deadline + 'T00:00:00');
+      // Range: start date through day before deadline
+      const start = new Date(c.date + 'T12:00:00');
+      const end = new Date(c.deadline + 'T12:00:00');
+      let d = new Date(start);
       while (d < end) {
-        const key = d.toISOString().split('T')[0];
-        if (!eventsByDate[key]) eventsByDate[key] = [];
-        eventsByDate[key].push({ ...c, _eventType: 'range' });
+        addEvent(localDateKey(d), c, 'range');
         d.setDate(d.getDate() + 1);
       }
-      // Deadline day shows with clock icon and time
-      if (!eventsByDate[c.deadline]) eventsByDate[c.deadline] = [];
-      eventsByDate[c.deadline].push({ ...c, _eventType: 'deadline' });
+      // Deadline day: red with clock icon
+      addEvent(c.deadline, c, 'deadline');
     } else if (isPendingOrRecorded && c.deadline) {
-      // Only deadline, no start date
-      if (!eventsByDate[c.deadline]) eventsByDate[c.deadline] = [];
-      eventsByDate[c.deadline].push({ ...c, _eventType: 'deadline' });
+      addEvent(c.deadline, c, 'deadline');
     } else if (c.date) {
-      // Normal event (sent, booked, etc.) — only show start date
-      if (!eventsByDate[c.date]) eventsByDate[c.date] = [];
-      eventsByDate[c.date].push({ ...c, _eventType: 'casting' });
+      addEvent(c.date, c, 'casting');
     }
-    // Multi-day events (dateEnd) for non-pending castings (e.g. booked shoots)
+    // Multi-day events for non-pending (e.g. booked shoots)
     if (c.dateEnd && c.date && !isPendingOrRecorded) {
-      let d = new Date(c.date + 'T00:00:00');
-      const end = new Date(c.dateEnd + 'T00:00:00');
+      let d = new Date(c.date + 'T12:00:00');
+      const end = new Date(c.dateEnd + 'T12:00:00');
       d.setDate(d.getDate() + 1);
       while (d <= end) {
-        const key = d.toISOString().split('T')[0];
-        if (!eventsByDate[key]) eventsByDate[key] = [];
-        eventsByDate[key].push({ ...c, _eventType: 'casting' });
+        addEvent(localDateKey(d), c, 'casting');
         d.setDate(d.getDate() + 1);
       }
     }

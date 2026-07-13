@@ -314,9 +314,9 @@ body {
 /* Rechazada → gris */
 .calendar-event.status-declined { background: rgba(148,163,184,0.15); color: #64748b; border-left: 2px solid #94a3b8; }
 /* Deadline day */
-.calendar-event.calendar-deadline { background: rgba(239,68,68,0.12); color: #dc2626; border-left: 2px solid #ef4444; font-weight: 600; }
+.calendar-event.calendar-deadline { background: rgba(239,68,68,0.18); color: #dc2626; border-left: 3px solid #ef4444; font-weight: 700; }
 /* Range days (between start and deadline) */
-.calendar-event.calendar-range { background: rgba(167,139,250,0.08); color: var(--text-muted); border-left: 2px dashed #a78bfa; font-size: 0.65rem; opacity: 0.7; }
+.calendar-event.calendar-range { background: rgba(167,139,250,0.18); color: #7c3aed; border-left: 2px dashed #a78bfa; }
 
 /* ---- Kanban View ---- */
 .kanban-container {
