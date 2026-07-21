@@ -719,7 +719,7 @@ function renderKanban() {
       const casting = castings.find(c => c.id === castingId);
       if (!casting || casting.status === newStatus) return;
       casting.status = newStatus;
-      await DB.save(casting);
+      await store.put(casting);
       // Celebration for booked or callback
       if (['booked', 'callback'].includes(newStatus)) {
         launchConfetti();
@@ -866,7 +866,7 @@ function openDetail(casting) {
   document.getElementById('btn-archive-casting')?.addEventListener('click', async () => {
     casting.archived = !casting.archived;
     casting.updatedAt = Date.now();
-    await DB.save(casting);
+    await store.put(casting);
     toast(casting.archived ? '📦 Casting archivado' : '📂 Casting desarchivado');
     openDetail(casting);
   });
