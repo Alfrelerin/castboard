@@ -1440,18 +1440,19 @@ async function gmailConnect() {
   }
 }
 
-function handleGmailResult(result) {
+function handleGmailResult(result, silent = false) {
   const accessToken = result.credential?.accessToken;
   console.log('Access token obtained:', !!accessToken);
 
   if (accessToken) {
     gmailToken = accessToken;
     gmailConnected = true;
+    localStorage.setItem('gmail_auto_connect', 'true');
     renderGmailPanel();
-    toast('Conectado a Gmail. Buscando emails...', 'success');
-    gmailAutoSync(false).then(() => renderGmailPanel());
+    if (!silent) toast('Conectado a Gmail. Buscando emails...', 'success');
+    gmailAutoSync(silent).then(() => renderGmailPanel());
     startAutoSync();
-  } else {
+  } else if (!silent) {
     toast('No se pudo obtener el token de Gmail. Intenta de nuevo.', 'error');
     console.log('result.credential:', result.credential);
   }
@@ -1461,6 +1462,7 @@ function gmailDisconnect() {
   stopAutoSync();
   gmailToken = null;
   gmailConnected = false;
+  localStorage.removeItem('gmail_auto_connect');
   renderGmailPanel();
   toast('Desconectado de Gmail');
 }
@@ -1807,6 +1809,22 @@ function hideLoginScreen() {
   document.getElementById('login-screen').classList.add('hidden');
 }
 
+async function tryAutoGmailConnect(user) {
+  if (gmailToken && gmailConnected) return; // Already connected
+  if (!localStorage.getItem('gmail_auto_connect')) return; // Never was connected
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope(GMAIL_SCOPES);
+    provider.setCustomParameters({ login_hint: user.email });
+    const result = await auth.signInWithPopup(provider);
+    handleGmailResult(result, true);
+    console.log('Gmail auto-reconnected silently');
+  } catch (e) {
+    console.log('Auto Gmail connect failed:', e.message);
+    // Don't bother the user, they can reconnect manually via the button
+  }
+}
+
 function onUserSignedIn(user) {
   currentUser = user;
   hideLoginScreen();
@@ -1828,10 +1846,12 @@ function onUserSignedIn(user) {
     renderAll();
   });
 
-  // Start Gmail auto-sync if we have a token
+  // Start Gmail auto-sync if we have a token, otherwise try to reconnect
   if (gmailToken && gmailConnected) {
     startAutoSync();
     setTimeout(() => gmailAutoSync(true), 2000);
+  } else {
+    setTimeout(() => tryAutoGmailConnect(user), 1500);
   }
 
   // Check birthday
