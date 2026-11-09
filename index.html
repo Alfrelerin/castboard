@@ -49,6 +49,7 @@
       <div class="view-tabs">
         <button class="view-tab active" data-view="calendar">Calendario</button>
         <button class="view-tab" data-view="kanban">Tablero</button>
+        <button class="view-tab" data-view="jobs">Trabajos</button>
         <button class="view-tab" data-view="stats">Stats</button>
       </div>
       <div class="header-actions">
@@ -84,6 +85,9 @@
 
     <!-- Kanban View -->
     <div id="view-kanban" class="view-content" style="display:none"></div>
+
+    <!-- Jobs View (dinero + online) -->
+    <div id="view-jobs" class="view-content" style="display:none"></div>
 
     <!-- Stats View -->
     <div id="view-stats" class="view-content" style="display:none"></div>
@@ -181,14 +185,6 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Tarifas</label>
-          <div id="f-tarifas-list"></div>
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-add-tarifa" style="margin-top:6px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Añadir tarifa
-          </button>
-        </div>
-        <div class="form-group">
           <label class="form-label">Notas</label>
           <textarea class="form-textarea" id="f-notes" placeholder="Detalles adicionales, requisitos, texto a preparar..."></textarea>
         </div>
@@ -218,6 +214,21 @@
       </div>
     </div>
     <div class="modal-body" id="detail-body"></div>
+  </div>
+
+  <!-- Money Modal -->
+  <div class="modal" id="modal-money">
+    <div class="modal-header">
+      <h2 class="modal-title" id="money-title">Dinero</h2>
+      <button class="btn btn-ghost btn-icon" id="modal-money-close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="money-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="btn-money-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="btn-money-save">Guardar</button>
+    </div>
   </div>
 
   <!-- Gmail Config Modal -->

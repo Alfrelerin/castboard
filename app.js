@@ -720,13 +720,10 @@ function renderKanban() {
       if (!casting || casting.status === newStatus) return;
       casting.status = newStatus;
       await store.put(casting);
+      toast(`${STATUSES[newStatus].icon} ${casting.project} → ${STATUSES[newStatus].label}`, ['booked', 'callback'].includes(newStatus) ? 'success' : 'info');
       // Celebration for booked or callback
-      if (['booked', 'callback'].includes(newStatus)) {
-        launchConfetti();
-        showToast(`${STATUSES[newStatus].icon} ${casting.project} → ${STATUSES[newStatus].label}`);
-      } else {
-        showToast(`${STATUSES[newStatus].icon} ${casting.project} → ${STATUSES[newStatus].label}`);
-      }
+      if (['booked', 'callback'].includes(newStatus)) launchConfetti();
+      promptMoneyIfNeeded(casting);
     });
   });
 }
@@ -762,20 +759,15 @@ function openDetail(casting) {
       ${detailField(ICONS.user, 'Director/a de casting', casting.director)}
       ${detailField(ICONS.building, 'Productora / Agencia', casting.company)}
       ${detailField(ICONS.film, 'Tipo de proyecto', casting.projectType)}
-      ${casting.tarifas && casting.tarifas.length > 0 ? `
-        <div class="detail-field">
-          <span class="detail-field-icon">💰</span>
-          <div>
-            <div class="detail-field-label">Tarifas</div>
-            ${casting.tarifas.map(t => {
-              const typeLabels = { rodaje: 'Rodaje', derechos: 'Derechos', derechos_rodaje: 'Derechos + Rodaje' };
-              return `<div class="detail-field-value" style="margin-bottom:2px;">${t.amount.toLocaleString('es-ES')} € — ${typeLabels[t.type] || t.type}</div>`;
-            }).join('')}
-            ${casting.tarifas.length > 1 ? `<div class="detail-field-value" style="font-weight:700;margin-top:4px;color:var(--success);">Total: ${casting.tarifas.reduce((s,t) => s + t.amount, 0).toLocaleString('es-ES')} €</div>` : ''}
-          </div>
-        </div>
-      ` : ''}
     </div>
+
+    ${(casting.status === 'booked' || hasMoney(casting)) ? `
+    <div class="detail-section">
+      <div class="detail-section-title">Dinero</div>
+      ${hasMoney(casting) ? moneyAmountsHtml(moneySummary(casting.money)) : '<div class="money-hint">Sin importes todavía.</div>'}
+      ${rightsLabel(casting.money) || isOnline(casting) ? `<div class="job-row-sub" style="margin-top:6px;">${escapeHtml(rightsLabel(casting.money))}${isOnline(casting) ? ' · 📺 Online' : ''}</div>` : ''}
+      <button class="btn btn-secondary btn-sm" id="btn-open-money" style="margin-top:10px;">💰 Dinero y derechos</button>
+    </div>` : ''}
 
     ${casting.needsReview ? `
     <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;">
@@ -836,8 +828,11 @@ function openDetail(casting) {
       }
 
       openDetail(casting);
+      if (casting.status === 'booked' && oldStatus !== 'booked') promptMoneyIfNeeded(casting);
     });
   });
+
+  document.getElementById('btn-open-money')?.addEventListener('click', () => openMoneyModal(casting));
 
   document.getElementById('btn-verify-casting')?.addEventListener('click', async () => {
     await markAsReviewed(casting.id);
@@ -889,33 +884,6 @@ function detailField(icon, label, value, rawHtml = false) {
 
 // ---- Form (Create/Edit) ----
 
-// ---- Tarifas (fees) ----
-let currentTarifas = [];
-
-function renderTarifas() {
-  const list = document.getElementById('f-tarifas-list');
-  list.innerHTML = currentTarifas.map((t, i) => `
-    <div class="tarifa-row" data-index="${i}">
-      <input type="number" class="form-input tarifa-amount" value="${t.amount || ''}" placeholder="0" min="0" step="0.01" style="width:100px;">
-      <span style="color:var(--text-muted);font-size:0.85rem;">€</span>
-      <select class="form-select tarifa-type" style="flex:1;">
-        <option value="rodaje" ${t.type === 'rodaje' ? 'selected' : ''}>Rodaje</option>
-        <option value="derechos" ${t.type === 'derechos' ? 'selected' : ''}>Derechos</option>
-        <option value="derechos_rodaje" ${t.type === 'derechos_rodaje' ? 'selected' : ''}>Derechos + Rodaje</option>
-      </select>
-      <button type="button" class="btn btn-ghost btn-icon tarifa-remove" title="Quitar">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-  `).join('');
-
-  list.querySelectorAll('.tarifa-row').forEach((row, i) => {
-    row.querySelector('.tarifa-amount').addEventListener('input', e => { currentTarifas[i].amount = parseFloat(e.target.value) || 0; });
-    row.querySelector('.tarifa-type').addEventListener('change', e => { currentTarifas[i].type = e.target.value; });
-    row.querySelector('.tarifa-remove').addEventListener('click', () => { currentTarifas.splice(i, 1); renderTarifas(); });
-  });
-}
-
 function openForm(casting = null, presetDate = null) {
   editingId = casting ? casting.id : null;
   const title = document.getElementById('modal-form-title');
@@ -937,18 +905,15 @@ function openForm(casting = null, presetDate = null) {
     document.getElementById('f-company').value = casting.company || '';
     document.getElementById('f-type').value = casting.projectType || '';
     document.getElementById('f-notes').value = casting.notes || '';
-    currentTarifas = (casting.tarifas || []).map(t => ({ ...t }));
   } else {
     title.textContent = 'Nuevo Casting';
     deleteBtn.style.display = 'none';
     document.getElementById('casting-form').reset();
-    currentTarifas = [];
     if (presetDate) {
       document.getElementById('f-date').value = presetDate;
     }
   }
 
-  renderTarifas();
   updateDeadlineVisibility();
   openModal('modal-form');
   setTimeout(() => document.getElementById('f-project').focus(), 300);
@@ -990,7 +955,10 @@ async function saveCasting() {
     company: document.getElementById('f-company').value.trim(),
     projectType: document.getElementById('f-type').value,
     notes: document.getElementById('f-notes').value.trim(),
-    tarifas: currentTarifas.filter(t => t.amount > 0),
+    tarifas: oldCasting?.tarifas || [],
+    money: oldCasting?.money || null,
+    onlineManual: oldCasting?.onlineManual ?? null,
+    archived: oldCasting?.archived || false,
     source: oldCasting?.source || 'manual',
     gmailId: oldCasting?.gmailId || null,
     needsReview: oldCasting ? false : false, // editing always clears review flag
@@ -1014,6 +982,7 @@ async function saveCasting() {
     toast(isEditing ? 'Casting actualizado' : 'Casting creado', 'success');
   }
   editingId = null;
+  promptMoneyIfNeeded(casting);
 }
 
 async function deleteCasting() {
@@ -1660,6 +1629,455 @@ function renderThemePicker() {
   });
 }
 
+// ---- Dinero y trabajos online ----
+const DEFAULT_IRPF = 24;
+const DEFAULT_AGENCIA = 20;
+let moneyCasting = null;
+let moneyDraft = null;
+let moneyFromBooking = false;
+
+function num(v) {
+  const n = parseFloat(String(v ?? '').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
+
+function fmtEUR(n) {
+  return (Number(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+
+function todayKey() {
+  return localDateKey(new Date());
+}
+
+function addMonthsToDate(dateStr, months) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const target = new Date(y, m - 1 + months, 1, 12);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(d, lastDay));
+  return localDateKey(target);
+}
+
+function emptyMoney(c) {
+  const m = { jornada: 0, derechos: 0, derechosMonths: 0, derechosStart: '', renewals: [], irpf: DEFAULT_IRPF, agencia: DEFAULT_AGENCIA, cobros: [] };
+  // Prefill from the old "Tarifas" field if it was used
+  (c?.tarifas || []).forEach(t => {
+    if (t.type === 'derechos') m.derechos += num(t.amount);
+    else m.jornada += num(t.amount);
+  });
+  return m;
+}
+
+function hasMoney(c) {
+  const m = c && c.money;
+  return !!m && (num(m.jornada) > 0 || num(m.derechos) > 0 || num(m.derechosMonths) > 0 ||
+    (m.renewals || []).length > 0 || (m.cobros || []).length > 0);
+}
+
+// Neto: primero se resta el IRPF y, sobre lo que queda, la comision de la agencia
+function netOf(bruto, m) {
+  const irpf = m.irpf ?? DEFAULT_IRPF;
+  const agencia = m.agencia ?? DEFAULT_AGENCIA;
+  return bruto * (1 - irpf / 100) * (1 - agencia / 100);
+}
+
+function moneySummary(m) {
+  if (!m) return { bruto: 0, neto: 0, cobrado: 0, pendiente: 0, concepts: [] };
+  const cobros = m.cobros || [];
+  const concepts = [
+    { key: 'jornada', label: 'Jornada laboral', bruto: num(m.jornada) },
+    { key: 'derechos', label: 'Derechos de imagen', bruto: num(m.derechos) },
+    ...(m.renewals || []).map((r, i) => ({ key: 'renov-' + i, label: `Renovación ${i + 1}`, bruto: num(r.amount) })),
+  ].filter(x => x.bruto > 0 || cobros.some(cb => cb.concept === x.key));
+  concepts.forEach(x => {
+    x.neto = netOf(x.bruto, m);
+    x.cobrado = cobros.filter(cb => cb.concept === x.key).reduce((s, cb) => s + num(cb.amount), 0);
+    x.pendiente = Math.max(0, x.neto - x.cobrado);
+  });
+  const bruto = concepts.reduce((s, x) => s + x.bruto, 0);
+  const neto = concepts.reduce((s, x) => s + x.neto, 0);
+  const cobrado = cobros.reduce((s, cb) => s + num(cb.amount), 0);
+  return { bruto, neto, cobrado, pendiente: Math.max(0, neto - cobrado), concepts };
+}
+
+function rightsTotalMonths(m) {
+  return num(m.derechosMonths) + (m.renewals || []).reduce((s, r) => s + num(r.months), 0);
+}
+
+function rightsEnd(m) {
+  if (!m || !m.derechosStart) return '';
+  const total = rightsTotalMonths(m);
+  return total > 0 ? addMonthsToDate(m.derechosStart, total) : '';
+}
+
+// none | pending (sin fecha de inicio) | scheduled | active | expired
+function rightsState(m) {
+  if (!m || (num(m.derechos) <= 0 && num(m.derechosMonths) <= 0)) return 'none';
+  if (!m.derechosStart) return 'pending';
+  const today = todayKey();
+  if (m.derechosStart > today) return 'scheduled';
+  const end = rightsEnd(m);
+  if (end && today >= end) return 'expired';
+  return 'active';
+}
+
+function rightsLabel(m) {
+  const st = rightsState(m);
+  if (st === 'none') return '';
+  if (st === 'pending') return `Derechos sin activar (${rightsTotalMonths(m) || '?'} meses)`;
+  if (st === 'scheduled') return `Derechos desde el ${formatDate(m.derechosStart)}`;
+  const end = rightsEnd(m);
+  if (st === 'expired') return `Derechos vencidos el ${formatDate(end)}`;
+  if (!end) return `Derechos activos desde el ${formatDate(m.derechosStart)}`;
+  const days = Math.round((new Date(end + 'T12:00:00') - new Date(todayKey() + 'T12:00:00')) / 86400000);
+  const left = days > 60 ? `quedan ${Math.round(days / 30)} meses` : `quedan ${days} días`;
+  return `Derechos hasta el ${formatDate(end)} (${left})`;
+}
+
+// Online: manual si se ha marcado a mano; si no, mientras los derechos esten activos
+function isOnline(c) {
+  if (c.onlineManual === true) return true;
+  if (c.onlineManual === false) return false;
+  return rightsState(c.money) === 'active';
+}
+
+function isJob(c) {
+  return c.status === 'booked' || hasMoney(c);
+}
+
+function promptMoneyIfNeeded(casting) {
+  if (casting.status !== 'booked' || hasMoney(casting)) return;
+  setTimeout(() => openMoneyModal(casting, true), 1200);
+}
+
+function moneyAmountsHtml(s) {
+  return `
+    <div class="job-card-amounts">
+      <span>Bruto<strong>${fmtEUR(s.bruto)}</strong></span>
+      <span>Neto<strong>${fmtEUR(s.neto)}</strong></span>
+      <span>Cobrado<strong style="color:var(--success)">${fmtEUR(s.cobrado)}</strong></span>
+      <span>Pendiente<strong style="color:var(--warning)">${fmtEUR(s.pendiente)}</strong></span>
+    </div>`;
+}
+
+// ---- Modal de dinero ----
+
+function openMoneyModal(casting, fromBooking = false) {
+  moneyCasting = casting;
+  moneyFromBooking = fromBooking;
+  moneyDraft = JSON.parse(JSON.stringify(casting.money || emptyMoney(casting)));
+  moneyDraft.renewals = moneyDraft.renewals || [];
+  moneyDraft.cobros = moneyDraft.cobros || [];
+  moneyDraft.online = casting.onlineManual === true ? 'yes' : casting.onlineManual === false ? 'no' : 'auto';
+  document.getElementById('money-title').textContent = casting.project;
+  renderMoneyBody();
+  openModal('modal-money');
+}
+
+function moneyField(label, field, value, extra = '') {
+  return `
+    <div class="form-group">
+      <label class="form-label">${label}</label>
+      <input type="number" class="form-input" data-field="${field}" value="${value === 0 || value ? value : ''}" min="0" step="0.01" inputmode="decimal" placeholder="0" ${extra}>
+    </div>`;
+}
+
+function renderMoneyBody() {
+  const m = moneyDraft;
+  const body = document.getElementById('money-body');
+  const conceptOptions = [
+    ['jornada', 'Jornada laboral'],
+    ['derechos', 'Derechos de imagen'],
+    ...m.renewals.map((r, i) => ['renov-' + i, `Renovación ${i + 1}`]),
+  ];
+
+  body.innerHTML = `
+    ${moneyFromBooking ? `<div class="money-intro">🎉 ¡Trabajo aceptado! Apunta lo que deberías cobrar. Puedes dejar campos en blanco y completarlos más tarde desde la pestaña Trabajos.</div>` : ''}
+
+    <div class="money-section">
+      <div class="money-section-title">Importes brutos</div>
+      <div class="form-row">
+        ${moneyField('Jornada laboral (€)', 'jornada', m.jornada || '')}
+        ${moneyField('Derechos de imagen (€)', 'derechos', m.derechos || '')}
+      </div>
+    </div>
+
+    <div class="money-section">
+      <div class="money-section-title">Derechos de imagen</div>
+      <div class="form-row">
+        ${moneyField('Duración (meses)', 'derechosMonths', m.derechosMonths || '', 'step="1"')}
+        <div class="form-group">
+          <label class="form-label">Inicio (si ya se sabe)</label>
+          <input type="date" class="form-input" data-field="derechosStart" value="${m.derechosStart || ''}">
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" data-action="activate-rights">▶️ Activar derechos hoy</button>
+      <div class="money-hint" id="money-rights-end"></div>
+
+      <div class="money-subtitle">Renovaciones</div>
+      ${m.renewals.map((r, i) => `
+        <div class="money-row" data-renewal="${i}">
+          <input type="number" class="form-input" data-renewal-field="months" value="${r.months || ''}" placeholder="Meses" min="0" step="1" inputmode="numeric">
+          <input type="number" class="form-input" data-renewal-field="amount" value="${r.amount || ''}" placeholder="€ bruto" min="0" step="0.01" inputmode="decimal">
+          <input type="date" class="form-input" data-renewal-field="date" value="${r.date || ''}">
+          <button type="button" class="btn btn-ghost btn-icon" data-action="remove-renewal" data-index="${i}" title="Quitar">✕</button>
+        </div>`).join('') || '<div class="money-hint">Sin renovaciones.</div>'}
+      <button type="button" class="btn btn-ghost btn-sm" data-action="add-renewal">+ Añadir renovación</button>
+    </div>
+
+    <div class="money-section">
+      <div class="money-section-title">Retenciones</div>
+      <div class="form-row">
+        ${moneyField('IRPF (%)', 'irpf', m.irpf ?? DEFAULT_IRPF)}
+        ${moneyField('Agencia (%)', 'agencia', m.agencia ?? DEFAULT_AGENCIA)}
+      </div>
+      <div class="money-hint">Primero se resta el IRPF y, sobre lo que queda, la comisión de la agencia.</div>
+    </div>
+
+    <div class="money-section">
+      <div class="money-section-title">Cobros recibidos (neto)</div>
+      ${m.cobros.map((cb, i) => `
+        <div class="money-row" data-cobro="${i}">
+          <select class="form-select" data-cobro-field="concept">
+            ${conceptOptions.map(([k, l]) => `<option value="${k}" ${cb.concept === k ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+          <input type="number" class="form-input" data-cobro-field="amount" value="${cb.amount || ''}" placeholder="€" min="0" step="0.01" inputmode="decimal">
+          <input type="date" class="form-input" data-cobro-field="date" value="${cb.date || ''}">
+          <button type="button" class="btn btn-ghost btn-icon" data-action="remove-cobro" data-index="${i}" title="Quitar">✕</button>
+        </div>`).join('') || '<div class="money-hint">Todavía no se ha cobrado nada.</div>'}
+      <button type="button" class="btn btn-ghost btn-sm" data-action="add-cobro">+ Añadir cobro</button>
+    </div>
+
+    <div class="money-section">
+      <div class="money-section-title">Online</div>
+      <select class="form-select" data-field="online">
+        <option value="auto" ${m.online === 'auto' ? 'selected' : ''}>Automático (online mientras duren los derechos)</option>
+        <option value="yes" ${m.online === 'yes' ? 'selected' : ''}>Sí, está online</option>
+        <option value="no" ${m.online === 'no' ? 'selected' : ''}>No está online</option>
+      </select>
+    </div>
+
+    <div class="money-summary" id="money-summary"></div>
+  `;
+  updateMoneySummary();
+}
+
+function updateMoneySummary() {
+  const m = moneyDraft;
+  const s = moneySummary(m);
+  const endEl = document.getElementById('money-rights-end');
+  if (endEl) {
+    const end = rightsEnd(m);
+    endEl.textContent = m.derechosStart
+      ? (end ? `Terminan el ${formatDate(end)} (${rightsTotalMonths(m)} meses en total)` : 'Indica la duración para calcular la fecha final.')
+      : 'Si aún no sabes cuándo sale, deja el inicio en blanco y actívalos el día que se emita.';
+  }
+  document.getElementById('money-summary').innerHTML = `
+    ${moneyAmountsHtml(s)}
+    ${s.concepts.length ? `<div class="money-concepts">
+      ${s.concepts.map(x => `<div><span>${x.label}</span><span>${fmtEUR(x.bruto)} → ${fmtEUR(x.neto)} · pendiente ${fmtEUR(x.pendiente)}</span></div>`).join('')}
+    </div>` : ''}
+  `;
+}
+
+function onMoneyInput(e) {
+  const t = e.target;
+  const m = moneyDraft;
+  if (!m) return;
+  if (t.dataset.field) {
+    const f = t.dataset.field;
+    m[f] = (f === 'derechosStart' || f === 'online') ? t.value : num(t.value);
+  } else if (t.dataset.renewalField) {
+    const i = +t.closest('[data-renewal]').dataset.renewal;
+    const f = t.dataset.renewalField;
+    m.renewals[i][f] = f === 'date' ? t.value : num(t.value);
+  } else if (t.dataset.cobroField) {
+    const i = +t.closest('[data-cobro]').dataset.cobro;
+    const f = t.dataset.cobroField;
+    m.cobros[i][f] = f === 'amount' ? num(t.value) : t.value;
+  } else {
+    return;
+  }
+  updateMoneySummary();
+}
+
+function onMoneyClick(e) {
+  const btn = e.target.closest('[data-action]');
+  if (!btn || !moneyDraft) return;
+  const m = moneyDraft;
+  const action = btn.dataset.action;
+  if (action === 'activate-rights') {
+    m.derechosStart = todayKey();
+    renderMoneyBody();
+  } else if (action === 'add-renewal') {
+    m.renewals.push({ months: 0, amount: 0, date: todayKey() });
+    renderMoneyBody();
+  } else if (action === 'remove-renewal') {
+    const i = +btn.dataset.index;
+    m.renewals.splice(i, 1);
+    // Re-number the cobros linked to later renewals
+    m.cobros = m.cobros.filter(cb => cb.concept !== 'renov-' + i).map(cb => {
+      const match = /^renov-(\d+)$/.exec(cb.concept || '');
+      if (match && +match[1] > i) cb.concept = 'renov-' + (+match[1] - 1);
+      return cb;
+    });
+    renderMoneyBody();
+  } else if (action === 'add-cobro') {
+    // Suggest the pending amount of the first concept still owed (editable for partial payments)
+    const next = moneySummary(m).concepts.find(x => x.pendiente > 0.005);
+    m.cobros.push({
+      concept: next ? next.key : 'jornada',
+      amount: next ? Math.round(next.pendiente * 100) / 100 : 0,
+      date: todayKey(),
+    });
+    renderMoneyBody();
+  } else if (action === 'remove-cobro') {
+    m.cobros.splice(+btn.dataset.index, 1);
+    renderMoneyBody();
+  }
+}
+
+async function saveMoney() {
+  if (!moneyCasting || !moneyDraft) return;
+  const { online, ...money } = moneyDraft;
+  money.cobros = money.cobros.filter(cb => num(cb.amount) > 0);
+  const c = castings.find(x => x.id === moneyCasting.id) || moneyCasting;
+  c.money = money;
+  c.onlineManual = online === 'yes' ? true : online === 'no' ? false : null;
+  c.updatedAt = Date.now();
+  await store.put(c);
+  closeAllModals();
+  toast('💰 Dinero guardado', 'success');
+  moneyCasting = null;
+  moneyDraft = null;
+}
+
+// ---- Pestana Trabajos ----
+
+function renderJobsView() {
+  const el = document.getElementById('view-jobs');
+  const jobs = castings.filter(isJob);
+  const totals = jobs.reduce((acc, c) => {
+    const s = moneySummary(c.money);
+    acc.bruto += s.bruto; acc.neto += s.neto; acc.cobrado += s.cobrado; acc.pendiente += s.pendiente;
+    return acc;
+  }, { bruto: 0, neto: 0, cobrado: 0, pendiente: 0 });
+  const online = castings.filter(isOnline);
+  const pendingRights = jobs.filter(c => rightsState(c.money) === 'pending');
+  const addable = jobs.filter(c => !isOnline(c));
+  const sorted = [...jobs].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  el.innerHTML = `
+    <div class="stats-section">
+      <h3 class="stats-section-title">💰 Dinero</h3>
+      <div class="stats-overview">
+        <div class="stats-overview-item">
+          <span class="stats-overview-number money-number">${fmtEUR(totals.bruto)}</span>
+          <span class="stats-overview-label">Bruto</span>
+        </div>
+        <div class="stats-overview-item">
+          <span class="stats-overview-number money-number" style="color:var(--accent)">${fmtEUR(totals.neto)}</span>
+          <span class="stats-overview-label">Neto</span>
+        </div>
+        <div class="stats-overview-item">
+          <span class="stats-overview-number money-number" style="color:var(--success)">${fmtEUR(totals.cobrado)}</span>
+          <span class="stats-overview-label">Cobrado</span>
+        </div>
+        <div class="stats-overview-item">
+          <span class="stats-overview-number money-number" style="color:var(--warning)">${fmtEUR(totals.pendiente)}</span>
+          <span class="stats-overview-label">Pendiente</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-section">
+      <h3 class="stats-section-title">📺 Online ahora (${online.length})</h3>
+      ${online.map(c => `
+        <div class="job-row">
+          <div class="job-row-main" data-open-money="${c.id}">
+            <div class="job-row-title">${escapeHtml(c.project)}</div>
+            <div class="job-row-sub">${escapeHtml(rightsLabel(c.money) || 'Online sin derechos de imagen')}${c.onlineManual === true ? ' · añadido a mano' : ''}</div>
+          </div>
+          <button class="btn btn-ghost btn-sm" data-online-remove="${c.id}">Quitar</button>
+        </div>`).join('') || '<div class="money-hint">Ningún trabajo online ahora mismo.</div>'}
+      ${addable.length ? `
+        <div class="job-add-online">
+          <select class="form-select" id="online-add-select">
+            ${addable.map(c => `<option value="${c.id}">${escapeHtml(c.project)}</option>`).join('')}
+          </select>
+          <button class="btn btn-secondary btn-sm" id="online-add-btn">Añadir a online</button>
+        </div>` : ''}
+    </div>
+
+    ${pendingRights.length ? `
+    <div class="stats-section">
+      <h3 class="stats-section-title">⏳ Derechos pendientes de activar</h3>
+      ${pendingRights.map(c => `
+        <div class="job-row">
+          <div class="job-row-main" data-open-money="${c.id}">
+            <div class="job-row-title">${escapeHtml(c.project)}</div>
+            <div class="job-row-sub">${rightsTotalMonths(c.money) ? rightsTotalMonths(c.money) + ' meses' : 'Sin duración indicada'}</div>
+          </div>
+          <button class="btn btn-primary btn-sm" data-activate="${c.id}">▶️ Activar hoy</button>
+        </div>`).join('')}
+    </div>` : ''}
+
+    <div class="stats-section">
+      <h3 class="stats-section-title">🎬 Trabajos (${jobs.length})</h3>
+      ${sorted.map(c => {
+        const s = moneySummary(c.money);
+        const pct = s.neto > 0 ? Math.min(100, (s.cobrado / s.neto) * 100) : 0;
+        const rl = rightsLabel(c.money);
+        return `
+        <div class="job-card" data-open-money="${c.id}">
+          <div class="job-card-head">
+            <span class="job-row-title">${escapeHtml(c.project)}</span>
+            ${isOnline(c) ? '<span class="tag tag-online">Online</span>' : ''}
+            ${c.archived ? '<span class="tag" style="background:rgba(0,0,0,0.04);color:var(--text-secondary)">Archivado</span>' : ''}
+          </div>
+          ${hasMoney(c) ? `${moneyAmountsHtml(s)}<div class="job-progress"><div style="width:${pct}%"></div></div>` : '<div class="money-hint">Sin importes. Toca para añadirlos.</div>'}
+          ${rl ? `<div class="job-row-sub">${escapeHtml(rl)}</div>` : ''}
+        </div>`;
+      }).join('') || '<div class="money-hint">Aún no hay trabajos aceptados.</div>'}
+    </div>
+  `;
+
+  el.querySelectorAll('[data-open-money]').forEach(n => n.addEventListener('click', () => {
+    const c = castings.find(x => x.id === n.dataset.openMoney);
+    if (c) openMoneyModal(c);
+  }));
+
+  el.querySelectorAll('[data-online-remove]').forEach(b => b.addEventListener('click', async e => {
+    e.stopPropagation();
+    const c = castings.find(x => x.id === b.dataset.onlineRemove);
+    if (!c) return;
+    c.onlineManual = false;
+    c.updatedAt = Date.now();
+    await store.put(c);
+    toast('Quitado de online');
+  }));
+
+  document.getElementById('online-add-btn')?.addEventListener('click', async () => {
+    const c = castings.find(x => x.id === document.getElementById('online-add-select').value);
+    if (!c) return;
+    c.onlineManual = true;
+    c.updatedAt = Date.now();
+    await store.put(c);
+    toast('📺 Añadido a online', 'success');
+  });
+
+  el.querySelectorAll('[data-activate]').forEach(b => b.addEventListener('click', async e => {
+    e.stopPropagation();
+    const c = castings.find(x => x.id === b.dataset.activate);
+    if (!c || !c.money) return;
+    if (!rightsTotalMonths(c.money)) { openMoneyModal(c); return; }
+    c.money.derechosStart = todayKey();
+    if (c.onlineManual === false) c.onlineManual = null;
+    c.updatedAt = Date.now();
+    await store.put(c);
+    toast(`▶️ Derechos activados hasta el ${formatDate(rightsEnd(c.money))}`, 'success');
+  }));
+}
+
 // ---- Render All ----
 
 function renderAll() {
@@ -1669,7 +2087,7 @@ function renderAll() {
   // Hide search/filters on stats view (they don't apply)
   const searchEl = document.querySelector('.search-container');
   const filterEl = document.getElementById('filter-bar');
-  if (currentView === 'stats') {
+  if (currentView === 'stats' || currentView === 'jobs') {
     if (searchEl) searchEl.style.display = 'none';
     if (filterEl) filterEl.style.display = 'none';
   } else {
@@ -1681,6 +2099,8 @@ function renderAll() {
     renderCalendar();
   } else if (currentView === 'stats') {
     renderStatsView();
+  } else if (currentView === 'jobs') {
+    renderJobsView();
   } else {
     renderKanban();
   }
@@ -1729,12 +2149,15 @@ function setupEvents() {
 
   document.getElementById('f-status').addEventListener('change', updateDeadlineVisibility);
   document.getElementById('btn-save').addEventListener('click', saveCasting);
+  document.getElementById('btn-money-save').addEventListener('click', saveMoney);
+  document.getElementById('btn-money-cancel').addEventListener('click', closeAllModals);
+  document.getElementById('modal-money-close').addEventListener('click', closeAllModals);
+  const moneyBody = document.getElementById('money-body');
+  moneyBody.addEventListener('input', onMoneyInput);
+  moneyBody.addEventListener('change', onMoneyInput);
+  moneyBody.addEventListener('click', onMoneyClick);
   document.getElementById('btn-delete').addEventListener('click', deleteCasting);
   document.getElementById('btn-cancel').addEventListener('click', closeAllModals);
-  document.getElementById('btn-add-tarifa').addEventListener('click', () => {
-    currentTarifas.push({ amount: 0, type: 'rodaje' });
-    renderTarifas();
-  });
 
   document.getElementById('search-input').addEventListener('input', (e) => {
     searchQuery = e.target.value;

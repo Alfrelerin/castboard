@@ -1380,6 +1380,160 @@ body {
   }
 }
 
+
+/* ---- Dinero y trabajos online ---- */
+.money-intro {
+  background: rgba(52,211,153,0.12);
+  border: 1px solid rgba(52,211,153,0.35);
+  color: #047857;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
+.money-section {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+}
+.money-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+.money-subtitle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 14px 0 6px;
+}
+.money-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 6px 0;
+}
+.money-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1.2fr auto;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.money-row .form-input,
+.money-row .form-select {
+  margin: 0;
+  padding: 8px;
+  font-size: 0.82rem;
+  min-width: 0;
+}
+.money-summary {
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+.money-concepts {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.money-concepts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+}
+.money-number {
+  font-size: 1.25rem !important;
+}
+.job-card-amounts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.job-card-amounts span {
+  display: flex;
+  flex-direction: column;
+}
+.job-card-amounts strong {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+.job-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.job-row:last-of-type { border-bottom: none; }
+.job-row-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.job-row-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.job-row-sub {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.job-add-online {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.job-add-online .form-select {
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+}
+.job-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.job-card:hover { border-color: var(--accent); }
+.job-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.job-progress {
+  height: 6px;
+  background: var(--bg-card);
+  border-radius: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.job-progress > div {
+  height: 100%;
+  background: var(--success);
+  border-radius: 3px;
+}
+.tag-online {
+  background: rgba(244,114,182,0.15);
+  color: #db2777;
+}
+@media (max-width: 480px) {
+  .view-tab { padding: 6px 8px; font-size: 0.74rem; }
+  .job-card-amounts { grid-template-columns: repeat(2, 1fr); }
+  .money-row { grid-template-columns: 1fr 1fr; }
+}
+
 /* ---- Print ---- */
 @media print {
   .header, .modal-overlay, .modal, .toast-container, .btn { display: none !important; }
