@@ -1221,6 +1221,7 @@ async function gmailAutoSync(silent = true) {
     if (res.status === 401) {
       gmailConnected = false;
       gmailToken = null;
+      clearSavedGmailToken();
       stopAutoSync();
       if (!silent) toast('Sesion de Gmail expirada. Reconecta desde el boton de Gmail.', 'error');
       renderGmailPanel();
@@ -1417,18 +1418,9 @@ async function gmailConnect() {
 
     let result;
     try {
-      // Try popup first (works on most browsers)
       result = await auth.signInWithPopup(provider);
     } catch (popupErr) {
-      // If popup blocked (common in Safari), fall back to redirect
-      if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/popup-closed-by-user') {
-        console.log('Popup blocked, falling back to redirect...');
-        toast('Redirigiendo a Google para conectar Gmail...', 'info');
-        // Store flag so we know to check for Gmail token on redirect return
-        sessionStorage.setItem('castboard_gmail_redirect', 'true');
-        await auth.signInWithRedirect(provider);
-        return; // Page will redirect
-      }
+      if (handlePopupError(popupErr)) return;
       throw popupErr;
     }
 
@@ -1447,7 +1439,7 @@ function handleGmailResult(result, silent = false) {
   if (accessToken) {
     gmailToken = accessToken;
     gmailConnected = true;
-    localStorage.setItem('gmail_auto_connect', 'true');
+    saveGmailToken(accessToken);
     renderGmailPanel();
     if (!silent) toast('Conectado a Gmail. Buscando emails...', 'success');
     gmailAutoSync(silent).then(() => renderGmailPanel());
@@ -1462,7 +1454,7 @@ function gmailDisconnect() {
   stopAutoSync();
   gmailToken = null;
   gmailConnected = false;
-  localStorage.removeItem('gmail_auto_connect');
+  clearSavedGmailToken();
   renderGmailPanel();
   toast('Desconectado de Gmail');
 }
@@ -1478,12 +1470,7 @@ async function loginWithGoogle() {
     try {
       result = await auth.signInWithPopup(provider);
     } catch (popupErr) {
-      if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/popup-closed-by-user') {
-        console.log('Popup blocked on login, using redirect...');
-        sessionStorage.setItem('castboard_gmail_redirect', 'true');
-        await auth.signInWithRedirect(provider);
-        return;
-      }
+      if (handlePopupError(popupErr)) return;
       throw popupErr;
     }
 
@@ -1497,6 +1484,7 @@ async function loginWithGoogle() {
 
 async function logout() {
   stopAutoSync();
+  clearSavedGmailToken();
   store.stopListening();
   gmailToken = null;
   gmailConnected = false;
@@ -1809,20 +1797,48 @@ function hideLoginScreen() {
   document.getElementById('login-screen').classList.add('hidden');
 }
 
-async function tryAutoGmailConnect(user) {
-  if (gmailToken && gmailConnected) return; // Already connected
-  if (!localStorage.getItem('gmail_auto_connect')) return; // Never was connected
-  try {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    provider.addScope(GMAIL_SCOPES);
-    provider.setCustomParameters({ login_hint: user.email });
-    const result = await auth.signInWithPopup(provider);
-    handleGmailResult(result, true);
-    console.log('Gmail auto-reconnected silently');
-  } catch (e) {
-    console.log('Auto Gmail connect failed:', e.message);
-    // Don't bother the user, they can reconnect manually via the button
+// ---- Gmail token persistence ----
+// Google access tokens last ~1h. We keep it so reopening the app within that
+// window syncs automatically without any popup.
+const GMAIL_TOKEN_TTL_MS = 55 * 60 * 1000;
+
+function saveGmailToken(token) {
+  localStorage.setItem('gmail_token', token);
+  localStorage.setItem('gmail_token_exp', String(Date.now() + GMAIL_TOKEN_TTL_MS));
+  localStorage.setItem('gmail_auto_connect', 'true');
+}
+
+function clearSavedGmailToken() {
+  localStorage.removeItem('gmail_token');
+  localStorage.removeItem('gmail_token_exp');
+  localStorage.removeItem('gmail_auto_connect');
+}
+
+function restoreGmailToken() {
+  const token = localStorage.getItem('gmail_token');
+  const exp = parseInt(localStorage.getItem('gmail_token_exp') || '0', 10);
+  if (token && Date.now() < exp) {
+    gmailToken = token;
+    gmailConnected = true;
+    return true;
   }
+  localStorage.removeItem('gmail_token');
+  localStorage.removeItem('gmail_token_exp');
+  return false;
+}
+
+// Popups only (redirect breaks on Safari/iOS because the app and the auth
+// domain are different sites). Returns true if the error was handled.
+function handlePopupError(err) {
+  if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+    toast('Inicio de sesion cancelado', 'info');
+    return true;
+  }
+  if (err.code === 'auth/popup-blocked') {
+    toast('El navegador ha bloqueado la ventana de Google. Permite ventanas emergentes y vuelve a intentarlo.', 'error');
+    return true;
+  }
+  return false;
 }
 
 function onUserSignedIn(user) {
@@ -1846,12 +1862,12 @@ function onUserSignedIn(user) {
     renderAll();
   });
 
-  // Start Gmail auto-sync if we have a token, otherwise try to reconnect
-  if (gmailToken && gmailConnected) {
+  // Gmail: reuse the saved token if still valid, sync right away
+  if ((gmailToken && gmailConnected) || restoreGmailToken()) {
     startAutoSync();
     setTimeout(() => gmailAutoSync(true), 2000);
-  } else {
-    setTimeout(() => tryAutoGmailConnect(user), 1500);
+  } else if (localStorage.getItem('gmail_auto_connect')) {
+    setTimeout(() => toast('Toca el icono de correo para reconectar Gmail', 'info'), 2000);
   }
 
   // Check birthday
