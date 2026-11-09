@@ -308,10 +308,15 @@ function deadlineInfo(casting) {
 }
 
 function getFilteredCastings() {
+  if (currentFilter === 'archived') return applySearch(castings.filter(c => c.archived));
   let filtered = castings.filter(c => !c.archived);
   if (currentFilter !== 'all') {
     filtered = filtered.filter(c => c.status === currentFilter);
   }
+  return applySearch(filtered);
+}
+
+function applySearch(filtered) {
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     filtered = filtered.filter(c =>
@@ -465,7 +470,12 @@ function renderStats() {
 
 function renderFilters() {
   const el = document.getElementById('filter-bar');
-  const items = [{ key: 'all', label: 'Todos' }, ...ALL_STATUSES.map(s => ({ key: s, label: STATUSES[s].label }))];
+  const archivedCount = castings.filter(c => c.archived).length;
+  const items = [
+    { key: 'all', label: 'Todos' },
+    ...ALL_STATUSES.map(s => ({ key: s, label: STATUSES[s].label })),
+    { key: 'archived', label: `📦 Archivados${archivedCount ? ' (' + archivedCount + ')' : ''}` },
+  ];
   el.innerHTML = items.map(f =>
     `<button class="filter-chip ${currentFilter === f.key ? 'active' : ''}" data-filter="${f.key}">${f.label}</button>`
   ).join('');
@@ -493,7 +503,6 @@ function renderCalendar() {
   }
 
   filtered.forEach(c => {
-    if (c.archived) return;
     const isPendingOrRecorded = c.status === 'pending' || c.status === 'recorded';
 
     if (isPendingOrRecorded && c.date && c.deadline) {
@@ -719,6 +728,7 @@ function renderKanban() {
       const casting = castings.find(c => c.id === castingId);
       if (!casting || casting.status === newStatus) return;
       casting.status = newStatus;
+      casting.updatedAt = Date.now();
       await store.put(casting);
       toast(`${STATUSES[newStatus].icon} ${casting.project} → ${STATUSES[newStatus].label}`, ['booked', 'callback'].includes(newStatus) ? 'success' : 'info');
       // Celebration for booked or callback
@@ -765,7 +775,7 @@ function openDetail(casting) {
     <div class="detail-section">
       <div class="detail-section-title">Dinero</div>
       ${hasMoney(casting) ? moneyAmountsHtml(moneySummary(casting.money)) : '<div class="money-hint">Sin importes todavía.</div>'}
-      ${rightsLabel(casting.money) || isOnline(casting) ? `<div class="job-row-sub" style="margin-top:6px;">${escapeHtml(rightsLabel(casting.money))}${isOnline(casting) ? ' · 📺 Online' : ''}</div>` : ''}
+      ${rightsLabel(casting.money) || isOnline(casting) ? `<div class="job-row-sub" style="margin-top:6px;">${escapeHtml(rightsLabel(casting.money))}${isOnline(casting) ? ' · 📺 On air' : ''}</div>` : ''}
       <button class="btn btn-secondary btn-sm" id="btn-open-money" style="margin-top:10px;">💰 Dinero y derechos</button>
     </div>` : ''}
 
@@ -860,6 +870,7 @@ function openDetail(casting) {
 
   document.getElementById('btn-archive-casting')?.addEventListener('click', async () => {
     casting.archived = !casting.archived;
+    casting.autoArchived = false;
     casting.updatedAt = Date.now();
     await store.put(casting);
     toast(casting.archived ? '📦 Casting archivado' : '📂 Casting desarchivado');
@@ -1629,7 +1640,7 @@ function renderThemePicker() {
   });
 }
 
-// ---- Dinero y trabajos online ----
+// ---- Dinero y trabajos on air ----
 const DEFAULT_IRPF = 24;
 const DEFAULT_AGENCIA = 20;
 let moneyCasting = null;
@@ -1733,7 +1744,7 @@ function rightsLabel(m) {
   return `Derechos hasta el ${formatDate(end)} (${left})`;
 }
 
-// Online: manual si se ha marcado a mano; si no, mientras los derechos esten activos
+// On air: manual si se ha marcado a mano; si no, mientras los derechos esten activos
 function isOnline(c) {
   if (c.onlineManual === true) return true;
   if (c.onlineManual === false) return false;
@@ -1848,11 +1859,11 @@ function renderMoneyBody() {
     </div>
 
     <div class="money-section">
-      <div class="money-section-title">Online</div>
+      <div class="money-section-title">On air</div>
       <select class="form-select" data-field="online">
-        <option value="auto" ${m.online === 'auto' ? 'selected' : ''}>Automático (online mientras duren los derechos)</option>
-        <option value="yes" ${m.online === 'yes' ? 'selected' : ''}>Sí, está online</option>
-        <option value="no" ${m.online === 'no' ? 'selected' : ''}>No está online</option>
+        <option value="auto" ${m.online === 'auto' ? 'selected' : ''}>Automático (on air mientras duren los derechos)</option>
+        <option value="yes" ${m.online === 'yes' ? 'selected' : ''}>Sí, está on air</option>
+        <option value="no" ${m.online === 'no' ? 'selected' : ''}>No está on air</option>
       </select>
     </div>
 
@@ -1990,21 +2001,21 @@ function renderJobsView() {
     </div>
 
     <div class="stats-section">
-      <h3 class="stats-section-title">📺 Online ahora (${online.length})</h3>
+      <h3 class="stats-section-title">📺 On air ahora (${online.length})</h3>
       ${online.map(c => `
         <div class="job-row">
           <div class="job-row-main" data-open-money="${c.id}">
             <div class="job-row-title">${escapeHtml(c.project)}</div>
-            <div class="job-row-sub">${escapeHtml(rightsLabel(c.money) || 'Online sin derechos de imagen')}${c.onlineManual === true ? ' · añadido a mano' : ''}</div>
+            <div class="job-row-sub">${escapeHtml(rightsLabel(c.money) || 'On air sin derechos de imagen')}${c.onlineManual === true ? ' · añadido a mano' : ''}</div>
           </div>
           <button class="btn btn-ghost btn-sm" data-online-remove="${c.id}">Quitar</button>
-        </div>`).join('') || '<div class="money-hint">Ningún trabajo online ahora mismo.</div>'}
+        </div>`).join('') || '<div class="money-hint">Ningún trabajo on air ahora mismo.</div>'}
       ${addable.length ? `
         <div class="job-add-online">
           <select class="form-select" id="online-add-select">
             ${addable.map(c => `<option value="${c.id}">${escapeHtml(c.project)}</option>`).join('')}
           </select>
-          <button class="btn btn-secondary btn-sm" id="online-add-btn">Añadir a online</button>
+          <button class="btn btn-secondary btn-sm" id="online-add-btn">Añadir a on air</button>
         </div>` : ''}
     </div>
 
@@ -2031,7 +2042,7 @@ function renderJobsView() {
         <div class="job-card" data-open-money="${c.id}">
           <div class="job-card-head">
             <span class="job-row-title">${escapeHtml(c.project)}</span>
-            ${isOnline(c) ? '<span class="tag tag-online">Online</span>' : ''}
+            ${isOnline(c) ? '<span class="tag tag-online">On air</span>' : ''}
             ${c.archived ? '<span class="tag" style="background:rgba(0,0,0,0.04);color:var(--text-secondary)">Archivado</span>' : ''}
           </div>
           ${hasMoney(c) ? `${moneyAmountsHtml(s)}<div class="job-progress"><div style="width:${pct}%"></div></div>` : '<div class="money-hint">Sin importes. Toca para añadirlos.</div>'}
@@ -2053,7 +2064,7 @@ function renderJobsView() {
     c.onlineManual = false;
     c.updatedAt = Date.now();
     await store.put(c);
-    toast('Quitado de online');
+    toast('Quitado de on air');
   }));
 
   document.getElementById('online-add-btn')?.addEventListener('click', async () => {
@@ -2062,7 +2073,7 @@ function renderJobsView() {
     c.onlineManual = true;
     c.updatedAt = Date.now();
     await store.put(c);
-    toast('📺 Añadido a online', 'success');
+    toast('📺 Añadido a on air', 'success');
   });
 
   el.querySelectorAll('[data-activate]').forEach(b => b.addEventListener('click', async e => {
@@ -2076,6 +2087,41 @@ function renderJobsView() {
     await store.put(c);
     toast(`▶️ Derechos activados hasta el ${formatDate(rightsEnd(c.money))}`, 'success');
   }));
+}
+
+// ---- Archivado automatico ----
+// Castings que no se han aceptado y llevan 2 meses sin cambios se archivan solos.
+// Siguen contando en las estadisticas y se pueden ver en el filtro "Archivados".
+const AUTO_ARCHIVE_DAYS = 60;
+let autoArchiveDone = false;
+
+function isStale(c, now = Date.now()) {
+  const today = todayKey();
+  const lastChange = Math.max(c.createdAt || 0, c.updatedAt || 0);
+  return !c.archived &&
+    c.status !== 'booked' &&
+    !hasMoney(c) &&
+    !isOnline(c) &&
+    now - lastChange > AUTO_ARCHIVE_DAYS * 86400000 &&
+    !(c.deadline && c.deadline >= today) &&   // aun dentro de plazo
+    !(c.date && c.date >= today) &&           // tiene una fecha futura
+    !(c.dateEnd && c.dateEnd >= today);
+}
+
+async function autoArchiveStale() {
+  if (autoArchiveDone || !currentUser) return;
+  autoArchiveDone = true;
+  const now = Date.now();
+  const stale = castings.filter(c => isStale(c, now));
+  if (!stale.length) return;
+  try {
+    await Promise.all(stale.map(c =>
+      userCastingsRef().doc(c.id).update({ archived: true, autoArchived: true, archivedAt: now })
+    ));
+    toast(`📦 ${stale.length} casting${stale.length > 1 ? 's' : ''} sin cambios en 2 meses archivado${stale.length > 1 ? 's' : ''}. Están en el filtro "Archivados".`, 'info');
+  } catch (e) {
+    console.warn('Auto-archive error:', e);
+  }
 }
 
 // ---- Render All ----
@@ -2283,6 +2329,7 @@ function onUserSignedIn(user) {
       if (c.status === 'casting') c.status = 'pending';
     });
     renderAll();
+    if (!autoArchiveDone) setTimeout(autoArchiveStale, 3000);
   });
 
   // Gmail: reuse the saved token if still valid, sync right away
@@ -2301,6 +2348,7 @@ function onUserSignedIn(user) {
 
 function onUserSignedOut() {
   currentUser = null;
+  autoArchiveDone = false;
   castings = [];
   gmailToken = null;
   gmailConnected = false;
