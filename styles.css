@@ -21,7 +21,7 @@
   --info: #60a5fa;
   --pending: #a78bfa;
   --recorded: #c4b5fd;
-  --sent: #818cf8;
+  --sent: #4ade80;
   --callback: #fbbf24;
   --optioned: #60a5fa;
   --rejected: #9ca3af;
@@ -304,7 +304,7 @@ body {
 /* En proceso → rosa */
 .calendar-event.status-pending { background: rgba(244,114,182,0.15); color: #db2777; border-left: 2px solid #f472b6; }
 .calendar-event.status-recorded { background: rgba(244,114,182,0.15); color: #db2777; border-left: 2px solid #f472b6; }
-.calendar-event.status-sent { background: rgba(244,114,182,0.15); color: #db2777; border-left: 2px solid #f472b6; }
+.calendar-event.status-sent { background: rgba(74,222,128,0.18); color: #15803d; border-left: 2px solid #4ade80; }
 /* Con respuesta → naranja */
 .calendar-event.status-callback { background: rgba(251,146,60,0.15); color: #c2410c; border-left: 2px solid #fb923c; }
 .calendar-event.status-optioned { background: rgba(251,146,60,0.15); color: #c2410c; border-left: 2px solid #fb923c; }
@@ -611,7 +611,7 @@ body {
 
 .status-badge.pending { background: rgba(167,139,250,0.12); color: #7c3aed; }
 .status-badge.recorded { background: rgba(196,181,253,0.12); color: #7c3aed; }
-.status-badge.sent { background: rgba(129,140,248,0.12); color: #4f46e5; }
+.status-badge.sent { background: rgba(74,222,128,0.15); color: #15803d; }
 .status-badge.callback { background: rgba(251,191,36,0.12); color: #b45309; }
 .status-badge.optioned { background: rgba(96,165,250,0.12); color: #2563eb; }
 .status-badge.rejected { background: rgba(156,163,175,0.12); color: #6b7280; }
@@ -1532,6 +1532,50 @@ body {
   .view-tab { padding: 6px 8px; font-size: 0.74rem; }
   .job-card-amounts { grid-template-columns: repeat(2, 1fr); }
   .money-row { grid-template-columns: 1fr 1fr; }
+}
+
+
+/* ---- Descartar desde el tablero ---- */
+.kanban-card { position: relative; }
+.kanban-card.needs-review { touch-action: pan-y; }
+.kanban-card-discard {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(239,68,68,0.3);
+  background: rgba(239,68,68,0.08);
+  color: #dc2626;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background var(--transition);
+}
+.kanban-card-discard:hover { background: #ef4444; color: white; }
+.kanban-card.needs-review .kanban-card-title { padding-right: 30px; }
+.kanban-card.swipe-ready { border-color: #ef4444; }
+.kanban-card.discarding {
+  transform: translateX(-110%) !important;
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease !important;
+}
+.toast-action { display: flex; align-items: center; gap: 12px; }
+.toast-action button {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
 }
 
 /* ---- Print ---- */

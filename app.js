@@ -74,39 +74,74 @@ const store = {
   }
 };
 
-// ---- Dismissed Gmail IDs (Firestore-backed, syncs across devices) ----
-async function getDismissedGmailIds() {
+// ---- Dismissed Gmail (Firestore-backed, syncs across devices) ----
+// ids: message ids and thread ids; subjects: normalized subjects (to skip replies)
+async function getDismissedGmail() {
   try {
     const doc = await userSettingsRef().doc('dismissed_gmail_ids').get();
     if (doc.exists) {
-      return new Set(doc.data().ids || []);
+      const d = doc.data();
+      return { ids: new Set(d.ids || []), subjects: new Set(d.subjects || []) };
     }
-  } catch (e) { console.warn('getDismissedGmailIds error:', e); }
-  return new Set();
+  } catch (e) { console.warn('getDismissedGmail error:', e); }
+  return { ids: new Set(), subjects: new Set() };
 }
 
-async function addDismissedGmailId(gmailId) {
-  const ids = await getDismissedGmailIds();
-  ids.add(gmailId);
-  await userSettingsRef().doc('dismissed_gmail_ids').set({ ids: [...ids] });
+async function saveDismissedGmail(d) {
+  await userSettingsRef().doc('dismissed_gmail_ids').set({ ids: [...d.ids], subjects: [...d.subjects] });
 }
 
-async function dismissCasting(castingId) {
+// Subject without "Re:", "RV:", "Fwd:"... and without "Casting -" prefixes
+const REPLY_PREFIX = /^\s*((re|rv|res|resp|respuesta|aw|fw|fwd|tr|enc)\s*(\[\d+\])?\s*[:：]\s*)+/i;
+function isReplySubject(subject) {
+  return REPLY_PREFIX.test(subject || '');
+}
+function subjectKey(subject) {
+  return (subject || '')
+    .replace(REPLY_PREFIX, '')
+    .replace(/casting\s*[-:]\s*/i, '')
+    .replace(/convocatoria\s*[-:]\s*/i, '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+async function dismissCasting(castingId, { undoable = false } = {}) {
   const casting = castings.find(c => c.id === castingId);
   if (!casting) return;
-  if (casting.gmailId) {
-    await addDismissedGmailId(casting.gmailId);
-  }
+  const d = await getDismissedGmail();
+  const added = { ids: [], subject: null };
+  [casting.gmailId, casting.gmailThreadId].filter(Boolean).forEach(id => { if (!d.ids.has(id)) { d.ids.add(id); added.ids.push(id); } });
+  const key = subjectKey(casting.gmailSubject || (casting.source === 'gmail' ? casting.project : ''));
+  if (key.length >= 6 && !d.subjects.has(key)) { d.subjects.add(key); added.subject = key; }
+  if (casting.source === 'gmail') await saveDismissedGmail(d);
   await store.delete(castingId);
   closeAllModals();
-  toast('Casting descartado — no volverá a importarse', 'success');
+  if (!undoable) {
+    toast('Casting descartado — no volverá a importarse', 'success');
+    return;
+  }
+  toast(`🗑️ "${casting.project}" descartado`, 'success', {
+    label: 'Deshacer',
+    onClick: async () => {
+      await store.put(casting);
+      if (casting.source === 'gmail') {
+        const d2 = await getDismissedGmail();
+        added.ids.forEach(id => d2.ids.delete(id));
+        if (added.subject) d2.subjects.delete(added.subject);
+        await saveDismissedGmail(d2);
+      }
+      toast('Recuperado', 'info');
+    },
+  });
 }
 
 // ---- Status Config (3 groups) ----
 const STATUSES = {
   pending:   { label: 'Pendiente',           color: '#a78bfa', icon: '📋', group: 'proceso' },
   recorded:  { label: 'Grabado no enviado',  color: '#c4b5fd', icon: '🎬', group: 'proceso' },
-  sent:      { label: 'Enviado',             color: '#818cf8', icon: '📤', group: 'proceso' },
+  sent:      { label: 'Enviado',             color: '#4ade80', icon: '📤', group: 'proceso' },
   callback:  { label: 'Callback',            color: '#fbbf24', icon: '📞', group: 'respuesta' },
   optioned:  { label: 'Opcionada',           color: '#60a5fa', icon: '⭐', group: 'respuesta' },
   rejected:  { label: 'Opción caída',        color: '#9ca3af', icon: '📉', group: 'respuesta' },
@@ -274,13 +309,23 @@ function localDateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function toast(message, type = 'info') {
+function toast(message, type = 'info', action = null) {
   const container = document.getElementById('toast-container');
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   el.textContent = message;
+  let ms = 3000;
+  if (action) {
+    ms = 6000;
+    el.classList.add('toast-action');
+    el.style.animation = 'toastIn 0.3s ease, toastOut 0.3s ease 5.7s forwards';
+    const btn = document.createElement('button');
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => { el.remove(); action.onClick(); });
+    el.appendChild(btn);
+  }
   container.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+  setTimeout(() => el.remove(), ms);
 }
 
 function escapeHtml(str) {
@@ -664,7 +709,8 @@ function renderKanban() {
                     <div style="font-size:0.8rem;margin-top:4px;">Sin elementos</div>
                   </div>
                 ` : col.items.map(c => `
-                  <div class="kanban-card fade-in" data-id="${c.id}" draggable="true">
+                  <div class="kanban-card fade-in ${c.needsReview ? 'needs-review' : ''}" data-id="${c.id}" draggable="true">
+                    ${c.needsReview ? `<button class="kanban-card-discard" data-discard="${c.id}" title="Descartar (falso positivo)">✕</button>` : ''}
                     <div class="kanban-card-title">${escapeHtml(c.project)}</div>
                     <div class="kanban-card-meta">
                       ${c.character || c.role ? `<div class="kanban-card-meta-item">${ICONS.user} ${escapeHtml(c.character || '')}${c.character && c.role ? ' — ' : ''}${escapeHtml(c.role || '')}</div>` : ''}
@@ -691,10 +737,20 @@ function renderKanban() {
   // Click to open detail
   el.querySelectorAll('.kanban-card').forEach(card => {
     card.addEventListener('click', () => {
+      if (card.dataset.swiped) { delete card.dataset.swiped; return; }
       const casting = castings.find(c => c.id === card.dataset.id);
       if (casting) openDetail(casting);
     });
   });
+
+  // Discard false positives straight from the board (button or swipe left)
+  el.querySelectorAll('.kanban-card-discard').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      discardFromBoard(btn.closest('.kanban-card'));
+    });
+  });
+  el.querySelectorAll('.kanban-card.needs-review').forEach(enableSwipeToDiscard);
 
   // Drag & Drop
   el.querySelectorAll('.kanban-card').forEach(card => {
@@ -736,6 +792,52 @@ function renderKanban() {
       promptMoneyIfNeeded(casting);
     });
   });
+}
+
+function discardFromBoard(card) {
+  if (!card || card.dataset.discarding) return;
+  card.dataset.discarding = '1';
+  card.classList.add('discarding');
+  setTimeout(() => dismissCasting(card.dataset.id, { undoable: true }), 200);
+}
+
+function enableSwipeToDiscard(card) {
+  const THRESHOLD = 90;
+  let startX = 0, startY = 0, dx = 0, mode = null; // mode: null | 'swipe' | 'scroll'
+  card.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    startX = t.clientX; startY = t.clientY; dx = 0; mode = null;
+    card.style.transition = 'none';
+  }, { passive: true });
+  card.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    const mx = t.clientX - startX, my = t.clientY - startY;
+    if (!mode) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      mode = (mx < 0 && Math.abs(mx) > Math.abs(my) * 1.5) ? 'swipe' : 'scroll';
+    }
+    if (mode !== 'swipe') return;
+    e.preventDefault(); // don't scroll the board while swiping a card
+    dx = Math.min(0, mx);
+    const p = Math.min(1, -dx / THRESHOLD);
+    card.style.transform = `translateX(${dx}px)`;
+    card.style.background = `rgba(239,68,68,${0.06 + p * 0.14})`;
+    card.classList.toggle('swipe-ready', p >= 1);
+  }, { passive: false });
+  const end = () => {
+    if (mode === 'swipe') {
+      card.dataset.swiped = '1';
+      setTimeout(() => delete card.dataset.swiped, 400);
+      if (-dx >= THRESHOLD) { discardFromBoard(card); return; }
+    }
+    card.style.transition = '';
+    card.style.transform = '';
+    card.style.background = '';
+    card.classList.remove('swipe-ready');
+    mode = null;
+  };
+  card.addEventListener('touchend', end);
+  card.addEventListener('touchcancel', end);
 }
 
 // ---- Detail View ----
@@ -1224,16 +1326,31 @@ async function gmailAutoSync(silent = true) {
       return;
     }
 
-    const existingGmailIds = new Set(castings.filter(c => c.gmailId).map(c => c.gmailId));
-    const dismissedIds = await getDismissedGmailIds();
+    // Known messages/threads. A thread id equals the id of its first message,
+    // so castings imported before this change are also matched by thread.
+    const knownIds = new Set();
+    const knownSubjects = new Set();
+    castings.forEach(c => {
+      if (c.gmailId) knownIds.add(c.gmailId);
+      if (c.gmailThreadId) knownIds.add(c.gmailThreadId);
+      if (c.source === 'gmail') {
+        const k = subjectKey(c.gmailSubject || c.project);
+        if (k.length >= 6) knownSubjects.add(k);
+      }
+    });
+    const dismissed = await getDismissedGmail();
 
     let imported = 0;
     let skippedExisting = 0;
     let skippedDismissed = 0;
+    let skippedReplies = 0;
 
-    for (const msg of data.messages) {
-      if (existingGmailIds.has(msg.id)) { skippedExisting++; continue; }
-      if (dismissedIds.has(msg.id)) { skippedDismissed++; continue; }
+    // Oldest first, so the original email is imported before its replies
+    const messages = [...data.messages].reverse();
+    for (const msg of messages) {
+      if (knownIds.has(msg.id)) { skippedExisting++; continue; }
+      if (dismissed.ids.has(msg.id)) { skippedDismissed++; continue; }
+      if (msg.threadId && (knownIds.has(msg.threadId) || dismissed.ids.has(msg.threadId))) { skippedReplies++; continue; }
 
       const msgRes = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
@@ -1249,6 +1366,13 @@ async function gmailAutoSync(silent = true) {
       const from = headers.from || '';
       const emailDate = headers.date || '';
       const body = decodeEmailBody(msgData.payload) || msgData.snippet || '';
+
+      // A reply/forward of a casting we already have (or discarded) is not a new casting
+      const key = subjectKey(subject);
+      if (isReplySubject(subject) && key.length >= 6 && (knownSubjects.has(key) || dismissed.subjects.has(key))) {
+        skippedReplies++;
+        continue;
+      }
 
       console.log('Processing email:', subject, '| from:', from);
 
@@ -1271,6 +1395,8 @@ async function gmailAutoSync(silent = true) {
         notes: `Auto-importado de Gmail\nDe: ${from}\nFecha email: ${emailDate}\n\n${msgData.snippet || ''}`,
         source: 'gmail',
         gmailId: msg.id,
+        gmailThreadId: msgData.threadId || msg.threadId || null,
+        gmailSubject: subject,
         needsReview: true,
         createdAt: Date.now(),
         updatedAt: null,
@@ -1278,12 +1404,15 @@ async function gmailAutoSync(silent = true) {
 
       await store.put(casting);
       imported++;
+      knownIds.add(msg.id);
+      if (casting.gmailThreadId) knownIds.add(casting.gmailThreadId);
+      if (key.length >= 6) knownSubjects.add(key);
     }
 
     localStorage.setItem('gmail_last_sync_date', new Date().toISOString().split('T')[0].replace(/-/g, '/'));
     localStorage.setItem('gmail_last_sync', formatSyncTime());
 
-    console.log(`Gmail sync done: ${imported} imported, ${skippedExisting} already existed, ${skippedDismissed} dismissed`);
+    console.log(`Gmail sync done: ${imported} imported, ${skippedExisting} already existed, ${skippedDismissed} dismissed, ${skippedReplies} replies skipped`);
 
     if (imported > 0) {
       toast(`${imported} casting(s) importado(s) desde Gmail`, 'success');
