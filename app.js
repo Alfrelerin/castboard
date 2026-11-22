@@ -361,20 +361,73 @@ function getFilteredCastings() {
   return applySearch(filtered);
 }
 
+function normText(str) {
+  return (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function matchesSearch(c, query) {
+  const q = normText(query).trim();
+  if (!q) return true;
+  return ['project', 'character', 'role', 'location', 'director', 'company', 'notes', 'gmailSubject']
+    .some(f => normText(c[f]).includes(q));
+}
+
 function applySearch(filtered) {
-  if (searchQuery) {
-    const q = searchQuery.toLowerCase();
-    filtered = filtered.filter(c =>
-      (c.project || '').toLowerCase().includes(q) ||
-      (c.character || '').toLowerCase().includes(q) ||
-      (c.role || '').toLowerCase().includes(q) ||
-      (c.location || '').toLowerCase().includes(q) ||
-      (c.director || '').toLowerCase().includes(q) ||
-      (c.company || '').toLowerCase().includes(q) ||
-      (c.notes || '').toLowerCase().includes(q)
-    );
-  }
+  if (searchQuery) filtered = filtered.filter(c => matchesSearch(c, searchQuery));
   return filtered;
+}
+
+// ---- Buscador: dónde está algo (día y estado), incluidos archivados ----
+function castingMainDate(c) {
+  if ((c.status === 'pending' || c.status === 'recorded') && c.deadline) return { date: c.deadline, label: 'Límite' };
+  if (c.date) return { date: c.date, label: '' };
+  if (c.deadline) return { date: c.deadline, label: 'Límite' };
+  return { date: c.createdAt ? localDateKey(new Date(c.createdAt)) : '', label: 'Añadido' };
+}
+
+let searchTimer = null;
+function renderSearchResultsSoon() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderSearchResults, 120);
+}
+
+function renderSearchResults() {
+  const box = document.getElementById('search-results');
+  if (!box) return;
+  const q = searchQuery.trim();
+  if (q.length < 2) { box.classList.remove('open'); box.innerHTML = ''; return; }
+  const results = castings.filter(c => matchesSearch(c, q))
+    .sort((a, b) => (castingMainDate(b).date || '').localeCompare(castingMainDate(a).date || ''));
+  const shown = results.slice(0, 10);
+  box.innerHTML = shown.length ? shown.map(c => {
+    const st = STATUSES[c.status] || { label: c.status, color: '#9ca3af', icon: '' };
+    const d = castingMainDate(c);
+    return `
+      <div class="search-result" data-id="${c.id}">
+        <div class="search-result-title">${escapeHtml(c.project)}</div>
+        <div class="search-result-meta">
+          <span class="search-result-status" style="background:${st.color}22;color:${st.color};border-color:${st.color}55">${st.icon} ${st.label}</span>
+          ${d.date ? `<span>📅 ${d.label ? d.label + ': ' : ''}${formatDate(d.date)}</span>` : ''}
+          ${c.archived ? '<span>📦 Archivado</span>' : ''}
+          ${isOnline(c) ? '<span>📺 On air</span>' : ''}
+        </div>
+      </div>`;
+  }).join('') + (results.length > shown.length ? `<div class="search-result-more">${results.length - shown.length} resultados más — escribe algo más concreto</div>` : '')
+  : '<div class="search-result-more">Nada encontrado (también se busca en archivados)</div>';
+  box.classList.add('open');
+  box.querySelectorAll('.search-result').forEach(row => row.addEventListener('mousedown', e => {
+    e.preventDefault(); // keep focus handling simple
+    const c = castings.find(x => x.id === row.dataset.id);
+    if (!c) return;
+    box.classList.remove('open');
+    const d = castingMainDate(c).date;
+    if (d) {
+      const [y, m] = d.split('-').map(Number);
+      calendarDate = new Date(y, m - 1, 1);
+    }
+    renderAll();
+    openDetail(c);
+  }));
 }
 
 // ---- iCal Export ----
@@ -605,9 +658,9 @@ function renderCalendar() {
         const prefix = e._eventType === 'deadline' ? '⏰ ' : e._eventType === 'range' ? '· ' : '';
         const suffix = e._eventType === 'deadline' && (e.deadlineTime || e.time) ? ' ' + (e.deadlineTime || e.time) : '';
         const titleAttr = e._eventType === 'deadline' ? '⏰ Deadline: ' + e.project : e.project;
-        return `<div class="calendar-event ${cls}" data-id="${e.id}" title="${titleAttr}">${prefix}${e.project}${suffix}</div>`;
+        return `<div class="calendar-event ${cls}" data-id="${e.id}" title="${escapeHtml(titleAttr)}">${prefix}${escapeHtml(e.project)}${suffix}</div>`;
       }).join('')}
-      ${events.length > 3 ? `<div style="font-size:0.65rem;color:var(--text-muted);">+${events.length - 3} mas</div>` : ''}
+      ${events.length > 3 ? `<button type="button" class="calendar-more" data-date="${dateStr}">+${events.length - 3} más</button>` : ''}
     </div>`;
   }
 
@@ -656,9 +709,43 @@ function renderCalendar() {
     });
   });
 
+  el.querySelectorAll('.calendar-more').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      openDayModal(btn.dataset.date, eventsByDate[btn.dataset.date] || []);
+    });
+  });
+
   el.querySelectorAll('.calendar-day:not(.other-month)').forEach(day => {
     day.addEventListener('click', () => openForm(null, day.dataset.date));
   });
+}
+
+function openDayModal(dateStr, events) {
+  const d = new Date(dateStr + 'T12:00:00');
+  document.getElementById('day-title').textContent =
+    d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  const body = document.getElementById('day-body');
+  body.innerHTML = `
+    ${events.map(e => {
+      const cls = e._eventType === 'deadline' ? 'calendar-deadline' : e._eventType === 'range' ? 'calendar-range' : `status-${e.status}`;
+      const st = STATUSES[e.status];
+      const what = e._eventType === 'deadline' ? `⏰ Fecha límite${e.deadlineTime || e.time ? ' · ' + (e.deadlineTime || e.time) : ''}`
+        : e._eventType === 'range' ? '· Pendiente de enviar' : (st ? `${st.icon} ${st.label}` : '');
+      return `
+        <div class="day-event calendar-event ${cls}" data-id="${e.id}">
+          <div class="day-event-title">${escapeHtml(e.project)}</div>
+          <div class="day-event-meta">${what}${e.needsReview ? ' · Por revisar' : ''}</div>
+        </div>`;
+    }).join('')}
+    <button class="btn btn-secondary btn-sm" id="btn-day-new" style="margin-top:12px;">+ Nuevo casting este día</button>
+  `;
+  body.querySelectorAll('.day-event').forEach(row => row.addEventListener('click', () => {
+    const c = castings.find(x => x.id === row.dataset.id);
+    if (c) openDetail(c);
+  }));
+  document.getElementById('btn-day-new').addEventListener('click', () => openForm(null, dateStr));
+  openModal('modal-day');
 }
 
 // ---- Kanban (Grouped) ----
@@ -668,10 +755,13 @@ const FICTION_TYPES = ['cine', 'serie', 'corto'];
 function renderKanban() {
   const el = document.getElementById('view-kanban');
   const filtered = getFilteredCastings();
+  const statusFilter = (currentFilter !== 'all' && currentFilter !== 'archived') ? currentFilter : null;
+  const hideEmptyColumns = currentFilter === 'archived' || !!searchQuery.trim();
 
   el.innerHTML = STATUS_GROUPS.map(group => {
-    const columns = [];
+    let columns = [];
     group.statuses.forEach(status => {
+      if (statusFilter && status !== statusFilter) return;
       if (status === 'sent') {
         const allSent = filtered.filter(c => c.status === 'sent');
         const fiction = allSent.filter(c => FICTION_TYPES.includes((c.projectType || '').toLowerCase()));
@@ -686,6 +776,8 @@ function renderKanban() {
         columns.push({ status, items });
       }
     });
+    if (hideEmptyColumns) columns = columns.filter(col => col.items.length > 0);
+    if (!columns.length) return '';
 
     return `
       <div class="kanban-group">
@@ -733,6 +825,16 @@ function renderKanban() {
       </div>
     `;
   }).join('');
+
+  if (!el.innerHTML.trim()) {
+    el.innerHTML = `<div class="empty-state" style="padding:40px;">${searchQuery.trim() ? 'Nada coincide con la búsqueda.' : 'No hay castings aquí.'}</div>`;
+  }
+  if (statusFilter && filtered.length === 0) {
+    const archivedSame = castings.filter(c => c.archived && c.status === statusFilter).length;
+    if (archivedSame) {
+      el.insertAdjacentHTML('beforeend', `<div class="money-hint" style="margin-top:8px;">Hay ${archivedSame} en ${STATUSES[statusFilter].label} archivado${archivedSame > 1 ? 's' : ''}. Los ves en 📦 Archivados.</div>`);
+    }
+  }
 
   // Click to open detail
   el.querySelectorAll('.kanban-card').forEach(card => {
@@ -2334,7 +2436,15 @@ function setupEvents() {
   document.getElementById('btn-delete').addEventListener('click', deleteCasting);
   document.getElementById('btn-cancel').addEventListener('click', closeAllModals);
 
-  document.getElementById('search-input').addEventListener('input', (e) => {
+  const searchInput = document.getElementById('search-input');
+  searchInput.addEventListener('focus', renderSearchResults);
+  searchInput.addEventListener('blur', () => setTimeout(() => document.getElementById('search-results')?.classList.remove('open'), 150));
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { searchInput.value = ''; searchQuery = ''; renderAll(); renderSearchResults(); searchInput.blur(); }
+  });
+  document.getElementById('modal-day-close').addEventListener('click', closeAllModals);
+  searchInput.addEventListener('input', (e) => {
+    renderSearchResultsSoon();
     searchQuery = e.target.value;
     renderAll();
   });

@@ -76,7 +76,8 @@
     <!-- Search & Filters -->
     <div class="search-container">
       <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input type="text" class="search-input" id="search-input" placeholder="Buscar casting, proyecto, ubicacion...">
+      <input type="text" class="search-input" id="search-input" placeholder="Buscar: ¿dónde estaba ese casting? (también archivados)" autocomplete="off">
+      <div class="search-results" id="search-results"></div>
     </div>
     <div class="filter-bar" id="filter-bar"></div>
 
@@ -214,6 +215,17 @@
       </div>
     </div>
     <div class="modal-body" id="detail-body"></div>
+  </div>
+
+  <!-- Day Modal (todos los eventos de un día) -->
+  <div class="modal" id="modal-day">
+    <div class="modal-header">
+      <h2 class="modal-title" id="day-title" style="text-transform:capitalize;">Día</h2>
+      <button class="btn btn-ghost btn-icon" id="modal-day-close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="day-body"></div>
   </div>
 
   <!-- Money Modal -->
